@@ -10,7 +10,7 @@ This repository has completed all 8 phases of the build plan (SPEC.md §11): sca
 
 - A Spotify account with **Premium** (required for playback-state and repeat-mode control) that's logged into the venue's playback hardware as a Spotify Connect device
 - A [Spotify Developer](https://developer.spotify.com/dashboard) account, to register an app and get a Client ID/Secret
-- A Hostinger account with the Docker hosting product (SPEC.md §9 — Compose-from-URL), with their own **Traefik** project template deployed to the VPS first (see [step 4](#4-deploy-hostingers-traefik-template-one-time-per-vps) — Hostinger's Docker Manager runs Traefik as the sole listener on ports 80/443, shared by every project on the box)
+- A Hostinger account with the Docker hosting product (SPEC.md §9 — Compose-from-URL) — a native Traefik process shared across every project already owns ports 80/443 on the VPS; see [step 4](#4-set-up-hostinger) for what this means for domain routing
 - A **public** GitHub repository containing this code (required — see [Deployment model](#deployment-model) below for why)
 
 ## First deploy, from scratch
@@ -41,15 +41,13 @@ python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-### 4. Deploy Hostinger's Traefik template (one-time, per VPS)
+### 4. Set up Hostinger
 
-**Confirmed via a real deploy attempt:** Hostinger's Docker Manager runs its own Traefik instance as the single listener on host ports 80/443, shared across every project on the VPS — no per-project container (including this one) can bind those ports directly, and there's no separate panel field for port routing; Traefik discovers containers purely via Docker labels and a shared external network.
+**Confirmed via real deploy attempts on this VPS:** a native `traefik` process (not a container, not something any project's `docker-compose.yml` manages) already owns host ports 80/443, shared across every project Hostinger hosts on the box — no per-project container can bind those ports directly. `docker-compose.yml`'s `caddy` service therefore publishes port 80 *without* pinning a host port (`ports: - "80"`), letting Docker assign an arbitrary/ephemeral one instead — this is the same pattern already working for other, unrelated projects on this same host (confirmed by inspecting `docker ps -a` on the actual VPS).
 
-If you haven't already, deploy Hostinger's own Traefik project template first (one-click from the Docker VPS panel — see [Hostinger's Traefik docs](https://www.hostinger.com/support/connecting-multiple-docker-compose-projects-using-traefik-in-hostinger-docker-manager/)). This creates the `traefik-proxy` external network that `docker-compose.yml`'s `caddy` service joins, and terminates TLS/Let's Encrypt itself — this app's Caddy no longer needs to.
+**Still unconfirmed — needs checking against your specific Hostinger panel:** exactly how a domain gets associated with that ephemeral port. There is no `docker-compose.yml`-level mechanism for it (no Traefik labels, no shared network to join — an earlier attempt assumed the generic self-hosted-Traefik-template convention applied here and it didn't; see CLAUDE.md for the full history). Check the project's panel for a **Domains** or **Networking** tab (separate from environment variables) where you can point a domain at whichever port `docker compose ps` shows `caddy` publishing after a deploy.
 
-### 5. Set up Hostinger
-
-In Hostinger's Docker Manager, use **Compose from URL**, pointing at this repo's `docker-compose.yml` (the raw GitHub URL). Point your domain's DNS `A` record at the VPS IP. Set these environment variables in Hostinger's panel (never commit real values — see `.env.example` for the full list with generation instructions):
+In Hostinger's Docker Manager, use **Compose from URL**, pointing at this repo's `docker-compose.yml` (the raw GitHub URL). Set these environment variables in Hostinger's panel (never commit real values — see `.env.example` for the full list with generation instructions):
 
 | Variable | Value |
 |---|---|
@@ -58,19 +56,22 @@ In Hostinger's Docker Manager, use **Compose from URL**, pointing at this repo's
 | `SPOTIFY_REDIRECT_URI` | the exact redirect URI you registered in step 1 |
 | `TOKEN_ENCRYPTION_KEY` | generated in step 3 |
 | `SESSION_SECRET_KEY` | generated in step 3 |
-| `DOMAIN` | your venue's domain (bare, no scheme — used in Traefik's routing rule) |
-| `SITE_ADDRESS` | `http://<your domain>` — see [TLS mode](#tls-mode) below |
-| `SECURE_COOKIES` | `true` (safe as soon as Traefik's cert is issued — see [TLS mode](#tls-mode)) |
+| `DOMAIN` | your venue's domain |
+| `SITE_ADDRESS` | see [TLS mode](#tls-mode) below |
+| `SECURE_COOKIES` | `false` until TLS is confirmed working end-to-end (see [TLS mode](#tls-mode)), then `true` |
 
 Click **Update** to build and start the stack. `docker-compose.yml`'s healthcheck will confirm the container is up.
 
 ### TLS mode
 
-**Confirmed:** Hostinger's Traefik template always terminates TLS for you (SPEC.md §9/§12.1's open question — this is no longer conditional). Caddy in this app's own stack never runs its own Let's Encrypt here; it only sets security headers (CSP, HSTS, etc.) and reverse-proxies to `app:8000` over plain HTTP internally, behind Traefik. Set `SITE_ADDRESS=http://<your domain>` in production, always — this is not a per-deployment choice the way it was assumed to be before an actual Hostinger deploy was attempted.
+The native `traefik` process on this VPS was observed listening on both 80 *and* 443, which strongly suggests it terminates TLS itself the same way a normal Traefik reverse proxy would — but this is **not yet independently confirmed** the way the port-ownership finding above is. Until you've verified `https://<your domain>` actually works end-to-end once the Domains/Networking setup above is sorted out:
 
-`SECURE_COOKIES` is safe to set `true` as soon as Traefik has actually issued a certificate and HTTPS reaches browsers end-to-end (check by loading `https://<your domain>` directly) — leaving it `false` just means cookies aren't marked `Secure` over a connection that is HTTPS; leaving it `true` before HTTPS actually works means the browser silently refuses to set the cookie at all and login will appear broken.
+- **If it turns out Traefik does terminate TLS:** set `SITE_ADDRESS=http://<your domain>` — Caddy serves plain HTTP internally and only contributes its security headers (CSP, HSTS, etc.), not its own certificate.
+- **If it turns out nothing in front of the container terminates TLS:** set `SITE_ADDRESS` to your bare domain (e.g. `example.com`) — Caddy runs its own automatic HTTPS (Let's Encrypt), which requires ports 80/443 to actually reach this container, which may not be possible given the port-ownership finding above without further investigation.
 
-### 6. First login
+Once you've confirmed real HTTPS reaches browsers end-to-end, set `SECURE_COOKIES=true` and click Update again — leaving it `false` over working HTTPS just means cookies aren't marked `Secure`; leaving it `true` over plain HTTP means the browser silently refuses to set the cookie at all and login will appear broken.
+
+### 5. First login
 
 On first boot, the app seeds a single admin user (`admin`) with a random one-time password. **It is never logged in plaintext** — it's written to a file on the persistent data volume and logged only as a file path. Retrieve it:
 
@@ -80,11 +81,11 @@ docker compose exec app cat /data/initial_admin_password.txt
 
 (over SSH to whatever host Hostinger's Docker product runs on, or via Hostinger's own container shell/exec feature if it offers one). Log in at `https://<your-domain>/admin/login` with username `admin` and that password — you'll be forced to set a new password immediately, after which the file is deleted automatically.
 
-### 7. Connect Spotify
+### 6. Connect Spotify
 
 From the admin nav, go to **Spotify** and click **Connect Spotify**. You'll be sent to Spotify's consent screen; approve it, and you're returned to a page confirming the connection and its granted scopes.
 
-### 8. Set the default playlist
+### 7. Set the default playlist
 
 Open the venue's target playlist in Spotify, copy its ID from the share link (`https://open.spotify.com/playlist/`**`THIS_PART`**`?si=...`, or the middle segment of a `spotify:playlist:THIS_PART` URI), and paste it into **Default playlist ID** on the **Config** page. While you're there, review the other settings (explicit-track filtering, how many tracks ahead requests get inserted, playlist repeat, poll interval) — all documented inline on that page.
 
@@ -140,7 +141,7 @@ The app re-applies its migrations against whatever schema state the restored fil
 
 ### Changing the default playlist
 
-Update **Default playlist ID** on the **Config** page (see [step 8](#8-set-the-default-playlist) above for how to find a playlist's ID) — takes effect on the next poll interval, no restart needed.
+Update **Default playlist ID** on the **Config** page (see [step 7](#7-set-the-default-playlist) above for how to find a playlist's ID) — takes effect on the next poll interval, no restart needed.
 
 ## Deployment model
 
