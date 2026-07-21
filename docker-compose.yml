@@ -8,30 +8,26 @@ services:
       context: https://github.com/Pilly170/event-playlist.git#main
       dockerfile: caddy.Dockerfile
     restart: unless-stopped
-    expose:
+    # Do not hardcode a host port (e.g. "80:80") — a native Traefik process owned by
+    # Hostinger's own platform (not a container, not something this project's compose
+    # file manages) already listens on host 80/443 for every project on the VPS. The
+    # single-value form below publishes the container's port 80 to an
+    # arbitrary/ephemeral host port instead, matching how other working projects on
+    # this same host (e.g. a sibling limesurvey deployment) are set up — Hostinger's
+    # ingress discovers and routes to that assigned port itself; there is no
+    # traefik-proxy network or traefik.* label convention to opt into (an earlier fix
+    # here assumed the generic self-hosted-Traefik-template pattern applied and added
+    # exactly that; it doesn't — no such network or Traefik container exists on this
+    # VPS at all, confirmed via `docker network ls`/`docker ps -a`, and referencing a
+    # nonexistent external network broke `docker compose` validation entirely before
+    # any container could even start). See CLAUDE.md for the full history here.
+    ports:
       - "80"
     volumes:
       - caddy_data:/data
       - caddy_config:/config
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS}
-    networks:
-      - default
-      - traefik-proxy
-    # Hostinger's Docker Manager runs its own Traefik instance as the sole listener on
-    # host ports 80/443, shared across every project on the VPS — no per-project
-    # container may bind those ports directly (confirmed via a real deploy attempt,
-    # see CLAUDE.md). Traefik discovers this container over the external
-    # traefik-proxy network via these labels rather than a published port; it
-    # terminates TLS itself, so SITE_ADDRESS must be http://<domain> here (Caddy
-    # serves plain HTTP internally to Traefik, not its own Let's Encrypt).
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=traefik-proxy
-      - traefik.http.routers.${COMPOSE_PROJECT_NAME}.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.${COMPOSE_PROJECT_NAME}.entrypoints=websecure
-      - traefik.http.routers.${COMPOSE_PROJECT_NAME}.tls.certresolver=letsencrypt
-      - traefik.http.services.${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=80
     depends_on:
       - app
 
@@ -61,9 +57,3 @@ volumes:
   caddy_data:
   caddy_config:
   app_data:
-
-networks:
-  # Hostinger's pre-deployed Traefik project template creates this network; every
-  # other project joins it as external rather than each managing its own copy.
-  traefik-proxy:
-    external: true
