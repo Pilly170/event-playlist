@@ -1,0 +1,51 @@
+name: GuardDog
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  guarddog:
+    name: Scan dependencies for malicious packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # for actions/checkout to fetch code
+      security-events: write # for github/codeql-action/upload-sarif to upload results
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install guarddog
+        run: pip install guarddog
+
+      # requirements-dev.txt's `-r requirements.txt` line isn't followed by guarddog,
+      # so merge both files (stripping that line) into one target rather than scanning
+      # requirements.txt twice under two different job steps.
+      - name: Merge dependency lists
+        run: |
+          grep -h -v -E '^(-r |#|$)' requirements.txt requirements-dev.txt > /tmp/all-requirements.txt
+
+      # Non-blocking on purpose: guarddog's heuristics flag benign code patterns
+      # (filesystem reads, network calls) in essentially every real package, so
+      # `--exit-non-zero-on-finding` would fail this job on entirely safe dependencies.
+      # Findings go to GitHub's Security tab for review instead of gating the PR.
+      - name: Scan dependencies
+        run: |
+          guarddog pypi verify /tmp/all-requirements.txt \
+            --output-format sarif \
+            --exclude-rules repository_integrity_mismatch \
+            > guarddog.sarif
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          category: guarddog
+          sarif_file: guarddog.sarif

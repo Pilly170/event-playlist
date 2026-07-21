@@ -6,3 +6,4 @@ ruff==0.15.22
 black==26.5.1
 bandit==1.9.4
 pip-audit==2.10.1
+guarddog==3.1.0
