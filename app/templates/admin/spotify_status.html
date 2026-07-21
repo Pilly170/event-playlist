@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Spotify connection{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+<span class="eyebrow">Booth Connection</span>
+<h1>Spotify</h1>
+
+{% if stored %}
+  <p><span class="status-tag added">Connected</span></p>
+  <p class="mono ticket-meta">Scopes: {{ stored.scope }}</p>
+  <p class="mono ticket-meta">Token refreshes automatically until: {{ stored.expires_at.strftime("%Y-%m-%d %H:%M UTC") }}</p>
+  <p><a href="/admin/spotify/connect">Reconnect a different account</a></p>
+{% else %}
+  <p><span class="status-tag pending">Not connected</span></p>
+  <p>Connect the venue's Spotify account to enable search, the live playlist, and approvals.</p>
+  <a href="/admin/spotify/connect" class="button-link">Connect Spotify</a>
+{% endif %}
+{% endblock %}

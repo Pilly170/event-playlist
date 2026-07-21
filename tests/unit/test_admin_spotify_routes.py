@@ -110,3 +110,43 @@ def test_status_reports_not_connected_when_no_tokens_stored(client):
     response = client.get("/admin/spotify/status")
 
     assert response.json() == {"connected": False}
+
+
+def test_spotify_page_shows_not_connected(client):
+    response = client.get("/admin/spotify")
+
+    assert response.status_code == 200
+    assert "not connected" in response.text.lower()
+    assert "/admin/spotify/connect" in response.text
+
+
+def test_spotify_page_shows_connected(client, cipher):
+    async def handler(request):
+        return httpx2.Response(
+            200,
+            json={
+                "access_token": "access-1",
+                "refresh_token": "refresh-1",
+                "expires_in": 3600,
+                "scope": "playlist-read-private",
+            },
+        )
+
+    app.dependency_overrides[get_http_client] = lambda: httpx2.AsyncClient(
+        transport=httpx2.MockTransport(handler)
+    )
+    connect_response = client.get("/admin/spotify/connect", follow_redirects=False)
+    state_value = parse_qs(urlparse(connect_response.headers["location"]).query)[
+        "state"
+    ][0]
+    client.get(
+        "/admin/spotify/callback",
+        params={"code": "auth-code", "state": state_value},
+        follow_redirects=False,
+    )
+
+    response = client.get("/admin/spotify")
+
+    assert response.status_code == 200
+    assert "connected" in response.text.lower()
+    assert "playlist-read-private" in response.text

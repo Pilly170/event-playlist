@@ -1,42 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Requests{% endblock %}
 {% block content %}
+{% include "admin/_nav.html" %}
+<span class="eyebrow">Order Rail</span>
 <h1>Requests</h1>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 <h2>Pending</h2>
 {% if pending %}
-<ul>
+<ul class="ticket-list">
   {% for r in pending %}
-  <li>
-    <strong>{{ r.track_name }}</strong> — {{ r.artist_name }}
-    {% if r.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
-    (requested by {{ r.requestor_name }}, code {{ r.reference_code }})
+  <li class="ticket-row">
+    <span class="ticket-details">
+      <span class="track-name">{{ r.track_name }}</span>
+      <span class="track-artist">{{ r.artist_name }}</span>
+      {% if r.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
+      <br><span class="mono ticket-meta">requested by {{ r.requestor_name }} · code {{ r.reference_code }}</span>
+    </span>
     <form method="post" action="/admin/requests/{{ r.id }}/approve" class="inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit">Approve</button>
+      <button type="submit" class="stamp-approve">Approve</button>
     </form>
     <form method="post" action="/admin/requests/{{ r.id }}/deny" class="inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit">Deny</button>
+      <button type="submit" class="stamp-deny">Deny</button>
     </form>
   </li>
   {% endfor %}
 </ul>
 {% else %}
-<p>No pending requests.</p>
+<p class="empty-state">The rail is clear — no requests waiting.</p>
 {% endif %}
 
 <h2>Added</h2>
 {% if added %}
-<ul>
+<ul class="ticket-list">
   {% for r in added %}
-  <li>{{ r.track_name }} — {{ r.artist_name }} (position {{ r.playlist_insert_position }}, approved by {{ r.decided_by }})</li>
+  <li class="ticket-row">
+    <span class="ticket-details">
+      <span class="track-name">{{ r.track_name }}</span>
+      <span class="track-artist">{{ r.artist_name }}</span>
+      <br><span class="mono ticket-meta">position {{ r.playlist_insert_position }} · approved by {{ r.decided_by }}</span>
+    </span>
+  </li>
   {% endfor %}
 </ul>
 {% else %}
-<p>Nothing added yet.</p>
+<p class="empty-state">Nothing added yet.</p>
 {% endif %}
-
-<p><a href="/admin/config">Config</a> | <a href="/admin/spotify/status">Spotify status</a></p>
 {% endblock %}
