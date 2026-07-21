@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.db import get_connection, run_migrations
 from app.dependencies import get_cipher, get_db, get_http_client
 from app.main import app
+from app.security.session import require_onboarded_admin
 from app.services.crypto import TokenCipher
 
 
@@ -42,6 +43,9 @@ def client(db_path, cipher):
     app.dependency_overrides[get_http_client] = lambda: httpx2.AsyncClient(
         transport=httpx2.MockTransport(unexpected_http_call)
     )
+    # These tests exercise the Spotify OAuth flow, not admin auth — that's covered
+    # separately in test_admin_auth_routes.py, so the auth gate is stubbed out here.
+    app.dependency_overrides[require_onboarded_admin] = lambda: "admin"
     yield TestClient(app)
     app.dependency_overrides.clear()
 
