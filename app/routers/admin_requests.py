@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from app.config import settings
 from app.dependencies import get_cipher, get_db, get_http_client
 from app.models.requests import list_added, list_pending
+from app.security.csrf import get_or_create_csrf_token, verify_csrf_token
 from app.security.session import require_onboarded_admin
 from app.services.crypto import TokenCipher
 from app.services.playlist_ops import (
@@ -31,7 +32,12 @@ async def requests_queue(
     return templates.TemplateResponse(
         request,
         "admin/requests.html",
-        {"pending": list_pending(db), "added": list_added(db), "error": error},
+        {
+            "pending": list_pending(db),
+            "added": list_added(db),
+            "error": error,
+            "csrf_token": get_or_create_csrf_token(request),
+        },
     )
 
 
@@ -42,6 +48,7 @@ async def approve(
     db: sqlite3.Connection = Depends(get_db),
     cipher: TokenCipher = Depends(get_cipher),
     client: httpx2.AsyncClient = Depends(get_http_client),
+    _csrf: None = Depends(verify_csrf_token),
 ) -> Response:
     try:
         await approve_request(
@@ -65,6 +72,7 @@ async def deny(
     request_id: int,
     username: str = Depends(require_onboarded_admin),
     db: sqlite3.Connection = Depends(get_db),
+    _csrf: None = Depends(verify_csrf_token),
 ) -> Response:
     try:
         deny_request(db, request_id=request_id, admin_username=username)

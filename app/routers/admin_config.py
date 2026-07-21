@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from app.dependencies import get_db
 from app.models.audit_log import write_audit_log
 from app.models.config import get_config, update_config
+from app.security.csrf import get_or_create_csrf_token, verify_csrf_token
 from app.security.session import require_onboarded_admin
 
 router = APIRouter(prefix="/admin")
@@ -20,7 +21,11 @@ async def config_form(
     db: sqlite3.Connection = Depends(get_db),
 ) -> Response:
     config = get_config(db)
-    return templates.TemplateResponse(request, "admin/config.html", {"config": config})
+    return templates.TemplateResponse(
+        request,
+        "admin/config.html",
+        {"config": config, "csrf_token": get_or_create_csrf_token(request)},
+    )
 
 
 @router.post("/config")
@@ -34,6 +39,7 @@ async def config_submit(
     poll_interval_seconds: int = Form(...),
     username: str = Depends(require_onboarded_admin),
     db: sqlite3.Connection = Depends(get_db),
+    _csrf: None = Depends(verify_csrf_token),
 ) -> Response:
     updated = update_config(
         db,

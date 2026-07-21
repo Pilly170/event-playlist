@@ -22,6 +22,15 @@ def write_audit_log(
     conn.commit()
 
 
+def count_recent_actions(
+    conn: sqlite3.Connection, *, actor: str, action: str, since: datetime
+) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) FROM audit_log WHERE actor = ? AND action = ? AND at >= ?",
+        (actor, action, since.isoformat()),
+    ).fetchone()[0]
+
+
 def list_audit_log(conn: sqlite3.Connection) -> list[AuditLogEntry]:
     rows = conn.execute(
         "SELECT id, at, actor, action, detail FROM audit_log ORDER BY id DESC"

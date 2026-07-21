@@ -3,6 +3,7 @@
 {% block content %}
 <h1>Config</h1>
 <form method="post" action="/admin/config">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <label>
     <input type="checkbox" name="require_admin_approval" value="true" {% if config.require_admin_approval %}checked{% endif %}>
     Require admin approval before adding
@@ -29,5 +30,8 @@
   </label><br>
   <button type="submit">Save</button>
 </form>
-<form method="post" action="/admin/logout"><button type="submit">Log out</button></form>
+<form method="post" action="/admin/logout">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit">Log out</button>
+</form>
 {% endblock %}

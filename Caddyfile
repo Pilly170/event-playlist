@@ -10,9 +10,13 @@
 
 	encode gzip
 
+	# img-src allows https: (not just 'self') because album art URLs come directly
+	# from Spotify's API responses, hosted on Spotify's own CDN, not this app.
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	}
 }
