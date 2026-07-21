@@ -15,8 +15,9 @@ class Settings(BaseSettings):
     domain: str = "localhost"
     # False by default for local/plain-HTTP dev; set True once Hostinger's TLS
     # termination is confirmed (SPEC.md §9/§12.1) — a Secure cookie is silently
-    # dropped by browsers over plain HTTP, so flipping this too early breaks login.
-    session_cookie_secure: bool = False
+    # dropped by browsers over plain HTTP, so flipping this too early breaks every
+    # cookie-based feature (admin session, public device token) at once.
+    secure_cookies: bool = False
 
 
 settings = Settings()

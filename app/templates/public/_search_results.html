@@ -1,0 +1,19 @@
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% elif results %}
+  <ul class="track-results">
+    {% for track in results %}
+    <li>
+      {% if track.album_image_url %}<img src="{{ track.album_image_url }}" alt="" width="48" height="48">{% endif %}
+      <strong>{{ track.name }}</strong> — {{ track.artist }}
+      {% if track.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
+      <form hx-post="/request/select" hx-target="#page-content" hx-swap="innerHTML">
+        <input type="hidden" name="spotify_track_uri" value="{{ track.uri }}">
+        <button type="submit">Request this track</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No results.</p>
+{% endif %}

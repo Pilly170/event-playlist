@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Request a Song{% endblock %}
+{% block content %}
+<h1>Request a Song</h1>
+
+<div id="page-content">
+  <input
+    type="search"
+    name="q"
+    placeholder="Search for a song or artist..."
+    autocomplete="off"
+    hx-get="/request/search"
+    hx-trigger="input changed delay:400ms, search"
+    hx-target="#search-results"
+    hx-indicator="#search-indicator"
+  >
+  <span id="search-indicator" class="htmx-indicator">Searching…</span>
+
+  <div id="search-results"></div>
+</div>
+{% endblock %}
