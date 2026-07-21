@@ -8,21 +8,17 @@ services:
       context: https://github.com/Pilly170/event-playlist.git#main
       dockerfile: caddy.Dockerfile
     restart: unless-stopped
-    # Do not hardcode a host port (e.g. "80:80") — a native Traefik process owned by
-    # Hostinger's own platform (not a container, not something this project's compose
-    # file manages) already listens on host 80/443 for every project on the VPS. The
-    # single-value form below publishes the container's port 80 to an
-    # arbitrary/ephemeral host port instead, matching how other working projects on
-    # this same host (e.g. a sibling limesurvey deployment) are set up — Hostinger's
-    # ingress discovers and routes to that assigned port itself; there is no
-    # traefik-proxy network or traefik.* label convention to opt into (an earlier fix
-    # here assumed the generic self-hosted-Traefik-template pattern applied and added
-    # exactly that; it doesn't — no such network or Traefik container exists on this
-    # VPS at all, confirmed via `docker network ls`/`docker ps -a`, and referencing a
-    # nonexistent external network broke `docker compose` validation entirely before
-    # any container could even start). See CLAUDE.md for the full history here.
+    # Do not use ports 80/443 — a pre-existing, unrelated native Traefik process on
+    # this specific VPS (nothing to do with Hostinger's platform itself, nor with this
+    # project — see CLAUDE.md) already owns those. A single-value port form (letting
+    # Docker auto-assign an arbitrary host port) was tried first, matching how sibling
+    # projects on this host are set up, but that breaks Spotify's OAuth redirect URI
+    # (which must exactly match a fixed, registered value) and gives attendees no
+    # stable URL — the port changes on every redeploy. 8443 was confirmed free via
+    # `sudo ss -tlnp` on the actual VPS before picking it; update this (and
+    # SPOTIFY_REDIRECT_URI in Hostinger's panel) together if it ever conflicts.
     ports:
-      - "80"
+      - "8443:80"
     volumes:
       - caddy_data:/data
       - caddy_config:/config

@@ -10,7 +10,7 @@ This repository has completed all 8 phases of the build plan (SPEC.md §11): sca
 
 - A Spotify account with **Premium** (required for playback-state and repeat-mode control) that's logged into the venue's playback hardware as a Spotify Connect device
 - A [Spotify Developer](https://developer.spotify.com/dashboard) account, to register an app and get a Client ID/Secret
-- A Hostinger account with the Docker hosting product (SPEC.md §9 — Compose-from-URL) — a native Traefik process shared across every project already owns ports 80/443 on the VPS; see [step 4](#4-set-up-hostinger) for what this means for domain routing
+- A Hostinger account with the Docker hosting product (SPEC.md §9 — Compose-from-URL) — Docker Manager has no built-in reverse proxy/domain routing, so this app is reached via a fixed port rather than a bare domain unless you deploy your own reverse proxy in front; see [step 4](#4-set-up-hostinger)
 - A **public** GitHub repository containing this code (required — see [Deployment model](#deployment-model) below for why)
 
 ## First deploy, from scratch
@@ -20,10 +20,10 @@ This repository has completed all 8 phases of the build plan (SPEC.md §11): sca
 Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), create an app, and note its **Client ID** and **Client Secret**. Add a **Redirect URI** matching exactly:
 
 ```
-https://<your-domain>/admin/spotify/callback
+http://<your-domain-or-vps-hostname>:8443/admin/spotify/callback
 ```
 
-(use your actual venue domain, or `http://localhost:8000/admin/spotify/callback` for local development only).
+(`http://localhost:8000/admin/spotify/callback` for local development only — see [step 4](#4-set-up-hostinger) for why production uses a fixed `:8443` rather than a bare domain, unless you've set up your own reverse proxy with real TLS in front).
 
 ### 2. Get this code onto a public GitHub repo
 
@@ -43,9 +43,9 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ### 4. Set up Hostinger
 
-**Confirmed via real deploy attempts on this VPS:** a native `traefik` process (not a container, not something any project's `docker-compose.yml` manages) already owns host ports 80/443, shared across every project Hostinger hosts on the box — no per-project container can bind those ports directly. `docker-compose.yml`'s `caddy` service therefore publishes port 80 *without* pinning a host port (`ports: - "80"`), letting Docker assign an arbitrary/ephemeral one instead — this is the same pattern already working for other, unrelated projects on this same host (confirmed by inspecting `docker ps -a` on the actual VPS).
+**Confirmed via a real, working deploy on this VPS.** Per [Hostinger's own docs](https://www.hostinger.com/support/12040815-how-to-deploy-your-first-container-with-hostinger-docker-manager/), Docker Manager has **no built-in reverse proxy or domain routing at all** — the platform's own intended way to reach any deployed project is `http://<vps-ip-or-hostname>:<published-port>`. There's a separate, pre-existing `traefik` process on host ports 80/443 on this specific VPS — that's unrelated to Hostinger's platform and unrelated to this project (most likely set up previously for a different, sibling project sharing the same VPS) — so `caddy` can't use 80/443 either way.
 
-**Still unconfirmed — needs checking against your specific Hostinger panel:** exactly how a domain gets associated with that ephemeral port. There is no `docker-compose.yml`-level mechanism for it (no Traefik labels, no shared network to join — an earlier attempt assumed the generic self-hosted-Traefik-template convention applied here and it didn't; see CLAUDE.md for the full history). Check the project's panel for a **Domains** or **Networking** tab (separate from environment variables) where you can point a domain at whichever port `docker compose ps` shows `caddy` publishing after a deploy.
+`docker-compose.yml`'s `caddy` service therefore publishes a **fixed** host port, `8443` (confirmed free via `sudo ss -tlnp` on the actual VPS before choosing it — see CLAUDE.md if this ever needs to change). It deliberately does *not* let Docker auto-assign a random port: that was tried first, but an unstable port breaks Spotify's OAuth redirect URI (which must exactly match a fixed, registered value) and gives attendees no stable URL across redeploys.
 
 In Hostinger's Docker Manager, use **Compose from URL**, pointing at this repo's `docker-compose.yml` (the raw GitHub URL). Set these environment variables in Hostinger's panel (never commit real values — see `.env.example` for the full list with generation instructions):
 
@@ -53,23 +53,20 @@ In Hostinger's Docker Manager, use **Compose from URL**, pointing at this repo's
 |---|---|
 | `SPOTIFY_CLIENT_ID` | from step 1 |
 | `SPOTIFY_CLIENT_SECRET` | from step 1 |
-| `SPOTIFY_REDIRECT_URI` | the exact redirect URI you registered in step 1 |
+| `SPOTIFY_REDIRECT_URI` | the exact redirect URI you registered in step 1 — must include `:8443` |
 | `TOKEN_ENCRYPTION_KEY` | generated in step 3 |
 | `SESSION_SECRET_KEY` | generated in step 3 |
-| `DOMAIN` | your venue's domain |
-| `SITE_ADDRESS` | see [TLS mode](#tls-mode) below |
-| `SECURE_COOKIES` | `false` until TLS is confirmed working end-to-end (see [TLS mode](#tls-mode)), then `true` |
+| `DOMAIN` | your VPS's hostname or IP (a real custom domain needs your own reverse proxy in front — see below) |
+| `SITE_ADDRESS` | `http://<same value as DOMAIN>` — Caddy matches incoming requests' `Host` header against this exactly, so it must match what's actually in the URL bar, port included |
+| `SECURE_COOKIES` | `false` — see [TLS mode](#tls-mode) below |
 
-Click **Update** to build and start the stack. `docker-compose.yml`'s healthcheck will confirm the container is up.
+Click **Update** to build and start the stack, then visit `http://<DOMAIN>:8443/request` to confirm it's live. `docker-compose.yml`'s healthcheck will confirm the container is up even before that.
 
 ### TLS mode
 
-The native `traefik` process on this VPS was observed listening on both 80 *and* 443, which strongly suggests it terminates TLS itself the same way a normal Traefik reverse proxy would — but this is **not yet independently confirmed** the way the port-ownership finding above is. Until you've verified `https://<your domain>` actually works end-to-end once the Domains/Networking setup above is sorted out:
+**Confirmed: nothing currently terminates TLS in front of this app.** The `traefik` process on this VPS is unrelated to this project (see above) — there is no HTTPS path to this container at all right now. `SITE_ADDRESS` is plain `http://`, and `SECURE_COOKIES` must stay `false` (a `Secure` cookie is silently dropped by browsers over plain HTTP, and login will appear broken if this is set `true` without real HTTPS in place).
 
-- **If it turns out Traefik does terminate TLS:** set `SITE_ADDRESS=http://<your domain>` — Caddy serves plain HTTP internally and only contributes its security headers (CSP, HSTS, etc.), not its own certificate.
-- **If it turns out nothing in front of the container terminates TLS:** set `SITE_ADDRESS` to your bare domain (e.g. `example.com`) — Caddy runs its own automatic HTTPS (Let's Encrypt), which requires ports 80/443 to actually reach this container, which may not be possible given the port-ownership finding above without further investigation.
-
-Once you've confirmed real HTTPS reaches browsers end-to-end, set `SECURE_COOKIES=true` and click Update again — leaving it `false` over working HTTPS just means cookies aren't marked `Secure`; leaving it `true` over plain HTTP means the browser silently refuses to set the cookie at all and login will appear broken.
+For a real venue deployment, you'll want your own domain with real TLS — that means deploying your own reverse proxy in front of this stack (Hostinger's docs describe both [Traefik](https://www.hostinger.com/support/connecting-multiple-docker-compose-projects-using-traefik-in-hostinger-docker-manager/) and [Nginx Proxy Manager](https://www.hostinger.com/support/how-to-set-up-nginx-proxy-manager-using-hostinger-docker-manager/) options), pointed at this container's fixed `8443` port. Once that's genuinely serving HTTPS end-to-end, update `DOMAIN`/`SITE_ADDRESS` to that real domain (`SITE_ADDRESS=http://<domain>` — your reverse proxy terminates TLS, Caddy still serves plain HTTP internally and only contributes its security headers) and set `SECURE_COOKIES=true`.
 
 ### 5. First login
 
@@ -142,6 +139,21 @@ The app re-applies its migrations against whatever schema state the restored fil
 ### Changing the default playlist
 
 Update **Default playlist ID** on the **Config** page (see [step 7](#7-set-the-default-playlist) above for how to find a playlist's ID) — takes effect on the next poll interval, no restart needed.
+
+### Troubleshooting: app crash-looping right after deploy
+
+If the `app` container starts and immediately exits with `ValueError: Fernet key must be 32 url-safe base64-encoded bytes` in its logs (`docker logs event-playlist-app-1` or Hostinger's log panel), `TOKEN_ENCRYPTION_KEY` is blank, truncated, or wasn't actually saved in Hostinger's environment panel — regenerate it (the command's in [step 3](#3-generate-the-required-secrets)) and re-set it exactly as printed, no extra quotes or trailing whitespace, then click **Update** again. `SESSION_SECRET_KEY` being blank causes a related but distinct failure — check both are actually set (`docker exec event-playlist-app-1 printenv TOKEN_ENCRYPTION_KEY` / `SESSION_SECRET_KEY` against the running container) rather than assuming the panel saved what you typed.
+
+### Troubleshooting: site loads but returns an empty page
+
+If a request returns `HTTP/1.1 200 OK` with `Content-Length: 0` and `Server: Caddy` (no `Content-Type`, no real HTML) — Caddy is not proxying to the app: the request's `Host` header doesn't match `SITE_ADDRESS`. Caddy matches on that header exactly, port included. Confirm what's actually configured on the *currently running* container (not what you think you set — a stale earlier container can make this confusing if a redeploy happened between checks):
+
+```bash
+docker exec event-playlist-caddy-1 printenv SITE_ADDRESS
+docker exec event-playlist-caddy-1 wget -qO- http://127.0.0.1:2019/config/
+```
+
+The second command dumps Caddy's actual compiled routing rule (via its own admin API) — check the `"match":[{"host":[...]}]` value against the exact host/port you're requesting. Then retest with a matching `Host` header, e.g. `curl -v -H "Host: <that value>" http://<vps-ip>:8443/request`.
 
 ## Deployment model
 
