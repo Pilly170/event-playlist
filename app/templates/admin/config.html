@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Admin config{% endblock %}
+{% block content %}
+<h1>Config</h1>
+<form method="post" action="/admin/config">
+  <label>
+    <input type="checkbox" name="require_admin_approval" value="true" {% if config.require_admin_approval %}checked{% endif %}>
+    Require admin approval before adding
+  </label><br>
+  <label>
+    <input type="checkbox" name="exclude_explicit" value="true" {% if config.exclude_explicit %}checked{% endif %}>
+    Exclude explicit tracks
+  </label><br>
+  <label>
+    Default playlist ID
+    <input type="text" name="default_playlist_id" value="{{ config.default_playlist_id or '' }}">
+  </label><br>
+  <label>
+    Insert requests this many tracks ahead of current
+    <input type="number" name="insert_tracks_ahead" value="{{ config.insert_tracks_ahead }}" min="0" required>
+  </label><br>
+  <label>
+    <input type="checkbox" name="playlist_repeat_enabled" value="true" {% if config.playlist_repeat_enabled %}checked{% endif %}>
+    Playlist repeat enabled
+  </label><br>
+  <label>
+    Poll interval (seconds)
+    <input type="number" name="poll_interval_seconds" value="{{ config.poll_interval_seconds }}" min="1" required>
+  </label><br>
+  <button type="submit">Save</button>
+</form>
+<form method="post" action="/admin/logout"><button type="submit">Log out</button></form>
+{% endblock %}

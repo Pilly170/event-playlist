@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     session_secret_key: str = ""
     database_path: str = "./data/app.db"
     domain: str = "localhost"
+    # False by default for local/plain-HTTP dev; set True once Hostinger's TLS
+    # termination is confirmed (SPEC.md §9/§12.1) — a Secure cookie is silently
+    # dropped by browsers over plain HTTP, so flipping this too early breaks login.
+    session_cookie_secure: bool = False
 
 
 settings = Settings()

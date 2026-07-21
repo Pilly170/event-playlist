@@ -26,3 +26,7 @@ def get_http_client(request: Request) -> httpx2.AsyncClient:
 
 def get_cipher() -> TokenCipher:
     return TokenCipher(key=settings.token_encryption_key)
+
+
+def get_database_path() -> str:
+    return settings.database_path
