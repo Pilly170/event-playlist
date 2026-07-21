@@ -140,6 +140,21 @@ The app re-applies its migrations against whatever schema state the restored fil
 
 Update **Default playlist ID** on the **Config** page (see [step 7](#7-set-the-default-playlist) above for how to find a playlist's ID) — takes effect on the next poll interval, no restart needed.
 
+### Troubleshooting: app crash-looping right after deploy
+
+If the `app` container starts and immediately exits with `ValueError: Fernet key must be 32 url-safe base64-encoded bytes` in its logs (`docker logs event-playlist-app-1` or Hostinger's log panel), `TOKEN_ENCRYPTION_KEY` is blank, truncated, or wasn't actually saved in Hostinger's environment panel — regenerate it (the command's in [step 3](#3-generate-the-required-secrets)) and re-set it exactly as printed, no extra quotes or trailing whitespace, then click **Update** again. `SESSION_SECRET_KEY` being blank causes a related but distinct failure — check both are actually set (`docker exec event-playlist-app-1 printenv TOKEN_ENCRYPTION_KEY` / `SESSION_SECRET_KEY` against the running container) rather than assuming the panel saved what you typed.
+
+### Troubleshooting: site loads but returns an empty page
+
+If a request returns `HTTP/1.1 200 OK` with `Content-Length: 0` and `Server: Caddy` (no `Content-Type`, no real HTML) — Caddy is not proxying to the app: the request's `Host` header doesn't match `SITE_ADDRESS`. Caddy matches on that header exactly, port included. Confirm what's actually configured on the *currently running* container (not what you think you set — a stale earlier container can make this confusing if a redeploy happened between checks):
+
+```bash
+docker exec event-playlist-caddy-1 printenv SITE_ADDRESS
+docker exec event-playlist-caddy-1 wget -qO- http://127.0.0.1:2019/config/
+```
+
+The second command dumps Caddy's actual compiled routing rule (via its own admin API) — check the `"match":[{"host":[...]}]` value against the exact host/port you're requesting. Then retest with a matching `Host` header, e.g. `curl -v -H "Host: <that value>" http://<vps-ip>:8443/request`.
+
 ## Deployment model
 
 Hosting is Hostinger's Docker product via **Compose-from-URL**: Hostinger fetches only `docker-compose.yml` itself, never the surrounding repo, so `app.build.context` has to be a git URL rather than a local path — and since that build path can't authenticate against a private repo, the repo has to be public (mitigated by GitHub's secret scanning/push protection, step 2 above). See [`CLAUDE.md`](./CLAUDE.md) for the rest of the architecture.
