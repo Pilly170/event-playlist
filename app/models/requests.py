@@ -8,7 +8,8 @@ _MAX_REFERENCE_CODE_ATTEMPTS = 5
 
 _SELECT_REQUEST = (
     "SELECT id, spotify_track_uri, track_name, artist_name, is_explicit, requestor_name, "
-    "reference_code, device_token, client_ip, status, requested_at FROM requests"
+    "reference_code, device_token, client_ip, status, requested_at, decided_at, decided_by, "
+    "playlist_insert_position FROM requests"
 )
 
 
@@ -31,6 +32,9 @@ class Request:
     client_ip: str
     status: str
     requested_at: datetime
+    decided_at: datetime | None
+    decided_by: str | None
+    playlist_insert_position: int | None
 
 
 def has_pending_duplicate(conn: sqlite3.Connection, spotify_track_uri: str) -> bool:
@@ -130,6 +134,48 @@ def count_recent_requests_by_client_ip(
     ).fetchone()[0]
 
 
+def mark_request_added(
+    conn: sqlite3.Connection,
+    *,
+    request_id: int,
+    decided_by: str,
+    playlist_insert_position: int,
+) -> None:
+    conn.execute(
+        """
+        UPDATE requests
+        SET status = 'added', decided_at = ?, decided_by = ?, playlist_insert_position = ?
+        WHERE id = ?
+        """,
+        (
+            datetime.now(timezone.utc).isoformat(),
+            decided_by,
+            playlist_insert_position,
+            request_id,
+        ),
+    )
+    conn.commit()
+
+
+def delete_request(conn: sqlite3.Connection, request_id: int) -> None:
+    conn.execute("DELETE FROM requests WHERE id = ?", (request_id,))
+    conn.commit()
+
+
+def list_pending(conn: sqlite3.Connection) -> list[Request]:
+    rows = conn.execute(
+        f"{_SELECT_REQUEST} WHERE status = 'pending' ORDER BY requested_at"
+    ).fetchall()
+    return [_row_to_request(row) for row in rows]
+
+
+def list_added(conn: sqlite3.Connection) -> list[Request]:
+    rows = conn.execute(
+        f"{_SELECT_REQUEST} WHERE status = 'added' ORDER BY decided_at DESC"
+    ).fetchall()
+    return [_row_to_request(row) for row in rows]
+
+
 def _row_to_request(row) -> Request:
     (
         id_,
@@ -143,6 +189,9 @@ def _row_to_request(row) -> Request:
         client_ip,
         status,
         requested_at,
+        decided_at,
+        decided_by,
+        playlist_insert_position,
     ) = row
     return Request(
         id=id_,
@@ -156,4 +205,7 @@ def _row_to_request(row) -> Request:
         client_ip=client_ip,
         status=status,
         requested_at=datetime.fromisoformat(requested_at),
+        decided_at=datetime.fromisoformat(decided_at) if decided_at else None,
+        decided_by=decided_by,
+        playlist_insert_position=playlist_insert_position,
     )

@@ -12,6 +12,7 @@ from app.db import get_connection, run_migrations
 from app.routers import (
     admin_auth,
     admin_config,
+    admin_requests,
     admin_spotify,
     healthz,
     public_form,
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     app.include_router(healthz.router)
     app.include_router(admin_auth.router)
     app.include_router(admin_config.router)
+    app.include_router(admin_requests.router)
     app.include_router(admin_spotify.router)
     app.include_router(public_form.router)
     app.include_router(public_menu.router)

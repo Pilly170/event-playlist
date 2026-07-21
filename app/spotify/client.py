@@ -103,6 +103,62 @@ async def get_playlist_tracks(
     )
 
 
+async def get_playlist_track_uris(
+    conn: sqlite3.Connection,
+    cipher: TokenCipher,
+    client: httpx2.AsyncClient,
+    *,
+    client_id: str,
+    client_secret: str,
+    playlist_id: str,
+    page_size: int = 100,
+) -> list[str]:
+    # Walks every page — needed to find a track's exact position for insertion-offset
+    # math (SPEC.md §5), and to check "is this track already anywhere in the playlist"
+    # at approval time, not just on the first page.
+    uris: list[str] = []
+    offset = 0
+    while True:
+        page = await get_playlist_tracks(
+            conn,
+            cipher,
+            client,
+            client_id=client_id,
+            client_secret=client_secret,
+            playlist_id=playlist_id,
+            limit=page_size,
+            offset=offset,
+        )
+        uris.extend(track.uri for track in page.items)
+        offset += page_size
+        if offset >= page.total or not page.items:
+            break
+    return uris
+
+
+async def insert_track_into_playlist(
+    conn: sqlite3.Connection,
+    cipher: TokenCipher,
+    client: httpx2.AsyncClient,
+    *,
+    client_id: str,
+    client_secret: str,
+    playlist_id: str,
+    track_uri: str,
+    position: int,
+) -> str:
+    access_token = await get_valid_access_token(
+        conn, cipher, client, client_id=client_id, client_secret=client_secret
+    )
+    response = await client.post(
+        f"{API_BASE_URL}/playlists/{playlist_id}/tracks",
+        json={"uris": [track_uri], "position": position},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    response.raise_for_status()
+    return response.json()["snapshot_id"]
+
+
 async def search_tracks(
     conn: sqlite3.Connection,
     cipher: TokenCipher,

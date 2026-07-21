@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Requests{% endblock %}
+{% block content %}
+<h1>Requests</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<h2>Pending</h2>
+{% if pending %}
+<ul>
+  {% for r in pending %}
+  <li>
+    <strong>{{ r.track_name }}</strong> — {{ r.artist_name }}
+    {% if r.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
+    (requested by {{ r.requestor_name }}, code {{ r.reference_code }})
+    <form method="post" action="/admin/requests/{{ r.id }}/approve" style="display:inline">
+      <button type="submit">Approve</button>
+    </form>
+    <form method="post" action="/admin/requests/{{ r.id }}/deny" style="display:inline">
+      <button type="submit">Deny</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>No pending requests.</p>
+{% endif %}
+
+<h2>Added</h2>
+{% if added %}
+<ul>
+  {% for r in added %}
+  <li>{{ r.track_name }} — {{ r.artist_name }} (position {{ r.playlist_insert_position }}, approved by {{ r.decided_by }})</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>Nothing added yet.</p>
+{% endif %}
+
+<p><a href="/admin/config">Config</a> | <a href="/admin/spotify/status">Spotify status</a></p>
+{% endblock %}
