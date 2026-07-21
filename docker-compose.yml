@@ -20,8 +20,7 @@ services:
 
   app:
     build:
-      # TODO: replace <owner>/<repo> once this repo has a GitHub remote (SPEC.md §9, Phase 0).
-      context: https://github.com/<owner>/<repo>.git#main
+      context: https://github.com/Pilly170/event-playlist.git#main
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
