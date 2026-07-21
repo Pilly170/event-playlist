@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 0 (scaffold), Phase 1 (Spotify OAuth & token storage), Phase 2 (data layer & config), and Phase 3 (public search & request form, SPEC.md §11) are complete. Phases 4–8 (public menu, admin approval workflow, background worker, hardening, polish) are not yet implemented — `app/worker/` exists as an empty package stub per SPEC.md §13.
+Phase 0 (scaffold), Phase 1 (Spotify OAuth & token storage), Phase 2 (data layer & config), Phase 3 (public search & request form), and Phase 4 (public menu, SPEC.md §11) are complete. Phases 5–8 (admin approval workflow, background worker, hardening, polish) are not yet implemented — `app/worker/` exists as an empty package stub per SPEC.md §13.
 
 Repo is live at https://github.com/Pilly170/event-playlist (public). CI, secret scanning/push protection, and branch protection (PR + passing `lint-test-scan` check required on `main`, no direct pushes) are all set up — **work happens on feature branches with a PR into `main`, never a direct push.** Still open per SPEC.md: configure Hostinger's Compose-from-URL against this repo, and verify Hostinger's actual TLS-termination behavior (§9/§12.1 — the `Caddyfile`'s `SITE_ADDRESS` env var is the toggle once that's known).
 
@@ -37,6 +37,13 @@ Repo is live at https://github.com/Pilly170/event-playlist (public). CI, secret 
 - Renamed `SESSION_COOKIE_SECURE` → `SECURE_COOKIES` (`app/config.py:secure_cookies`) since this Phase's device-token cookie shares the exact same TLS-dependent `Secure`-flag rationale as Phase 2's admin session cookie — one flag, not two redundant ones for the same underlying concept.
 - `htmx.min.js` (2.0.10) is vendored into `app/static/js/`, not loaded from a CDN — keeps the container fully self-contained per SPEC.md §3's "single container" design and avoids a public-facing page depending on third-party JS delivery.
 - Search-as-you-type debouncing lives entirely in the `hx-trigger="input changed delay:400ms, search"` attribute in `form.html` — no JS beyond vendored htmx itself.
+
+**Phase 4 implementation notes:**
+- **No background poller exists yet, and `/menu` doesn't need one.** SPEC.md §11's Phase 4 "Done when" talks about views reflecting live state "within one poll interval," but that phrasing describes the full system once Phase 6's worker exists. For now, `GET /menu` just calls Spotify's currently-playing endpoint live on every page load (`get_now_playing()`) — that's at least as fresh as a poll-cached value would be, and there's nothing to build against yet since Phase 6 hasn't landed. Don't add a poller here; it belongs in Phase 6.
+- `app/spotify/client.py` gained `get_now_playing()` (parses `get_currently_playing()`'s raw dict into a `NowPlaying(track, is_playing)`) and `get_playlist_tracks()` (paginated, skips null `track` entries — a playlist can contain removed/regionally-unavailable tracks that come back as `{"track": null}`). Both reuse the existing `TrackResult` dataclass and the private `_track_json_to_result` parser rather than introducing new shapes.
+- The reference-code status lookup (`GET /menu?code=`) upper-cases the input before querying — codes are generated uppercase-only (`app/services/reference_code.py`), but there's no reason to make a user typing one back in match case exactly.
+- Playlist view falls back to "No playlist has been configured yet" when `config.default_playlist_id` is unset, rather than erroring — an admin hasn't necessarily set one by this point in the build (that happens via `/admin/config`, Phase 2).
+- No htmx on this phase's pages, unlike Phase 3's search-as-you-type — a one-shot reference-code lookup and traditional prev/next playlist pagination don't need live partial swaps, so they're plain `GET` forms/links. htmx stays vendored and available for whichever later phase actually needs it again.
 
 `SPEC.md` is the source of truth for this project. Read it in full before starting any phase of work — it contains locked-in decisions that should not be re-litigated without flagging the change explicitly. The summary below is a navigation aid, not a replacement for reading §1–§13 of `SPEC.md` directly.
 
