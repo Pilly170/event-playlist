@@ -46,6 +46,10 @@ bandit -r app -ll
 
 Note: `docker-compose.yml`'s `app.build.context` is a **git URL**, not `.` — this is required because Hostinger's Compose-from-URL deploy path fetches only that YAML file, never the surrounding repo (SPEC.md §9). `docker-compose.override.yml` is what makes local `docker compose up --build` use the working tree instead.
 
+## Dependency malware scanning (`.github/workflows/guarddog.yml`)
+
+A separate, **non-blocking** workflow runs DataDog's `guarddog` against every dependency (both `requirements.txt` and `requirements-dev.txt`, merged since `guarddog` doesn't follow the `-r requirements.txt` line) on every push/PR to `main`, uploading SARIF results to GitHub's Security > Code scanning tab. It is deliberately **not** part of the required `lint-test-scan` check and does **not** use `--exit-non-zero-on-finding`: that flag reacts to `guarddog`'s broad heuristic pattern matches (e.g. any `.read(`, `resolve(` call trips "capability" rules), which fire on essentially every real-world package — measured directly against this project's own dependencies, fastapi/jinja2/cryptography/uvicorn/httpx2 all triggered findings despite every one showing "0 risks detected." Treat this as a Security-tab triage feed, not a merge gate — don't "fix" the noise by adding `--exit-non-zero-on-finding` to CI without first tuning `--exclude-rules` extensively, or every PR will start failing on unrelated dependencies.
+
 ## What this app is
 
 A self-contained web utility (FastAPI, single container) that lets venue attendees request songs via a public web form. Requests queue in an admin-only list; approving one inserts it into the venue's *live* Spotify playlist a configurable number of tracks ahead of whatever is currently playing. The app never touches playback hardware directly — it only calls the Spotify Web API, and the hardware is just another Spotify Connect device on the same account.

@@ -2,7 +2,7 @@
 
 A self-contained web app that lets venue attendees request songs, queues them for admin approval, and inserts approved tracks into a live Spotify playlist. See [`SPEC.md`](./SPEC.md) for the full spec-driven build plan and [`CLAUDE.md`](./CLAUDE.md) for an architecture summary.
 
-This repository is currently at **Phase 0** of the build plan (SPEC.md §11) — scaffold only, no Spotify integration or admin/public routes yet beyond a health check and placeholder page.
+This repository is currently at **Phase 1** of the build plan (SPEC.md §11) — scaffold plus Spotify OAuth and encrypted token storage. See [`CLAUDE.md`](./CLAUDE.md) for what's implemented so far.
 
 ## Local development
 
@@ -34,4 +34,9 @@ ruff check .
 black --check .
 pip-audit -r requirements.txt
 bandit -r app -ll
+
+# Malicious-dependency scan (informational — see .github/workflows/guarddog.yml
+# for why this isn't gated on findings)
+grep -h -v -E '^(-r |#|$)' requirements.txt requirements-dev.txt > /tmp/all-requirements.txt
+guarddog pypi verify /tmp/all-requirements.txt --exclude-rules repository_integrity_mismatch
 ```
