@@ -1,0 +1,18 @@
+# TLS termination mode is an open Phase 0 verification item (SPEC.md §9, §12.1): confirm
+# whether Hostinger's Docker product terminates TLS in front of the container before go-live.
+#
+# SITE_ADDRESS controls the toggle without a rebuild:
+#   - Hostinger does NOT terminate TLS: SITE_ADDRESS=yourdomain.example  (Caddy runs auto-HTTPS)
+#   - Hostinger DOES terminate TLS:     SITE_ADDRESS=http://yourdomain.example  (plain HTTP internally)
+
+{$SITE_ADDRESS:http://localhost} {
+	reverse_proxy app:8000
+
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+}

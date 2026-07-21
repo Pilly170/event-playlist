@@ -1,0 +1,13 @@
+# Auto-applied by `docker compose` alongside docker-compose.yml for local development only.
+# Overrides the git-context build (required for Hostinger's deploy path, see docker-compose.yml)
+# with a local build context, and exposes the app port directly without Caddy.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
