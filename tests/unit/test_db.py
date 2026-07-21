@@ -16,8 +16,13 @@ def test_run_migrations_creates_spotify_auth_table(tmp_path):
 def test_run_migrations_does_not_reapply_already_applied_migrations(tmp_path):
     conn = get_connection(str(tmp_path / "test.db"))
     run_migrations(conn)
+    applied_after_first_run = conn.execute(
+        "SELECT COUNT(*) FROM schema_migrations"
+    ).fetchone()[0]
 
     run_migrations(conn)
 
-    applied_count = conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
-    assert applied_count == 1
+    applied_after_second_run = conn.execute(
+        "SELECT COUNT(*) FROM schema_migrations"
+    ).fetchone()[0]
+    assert applied_after_second_run == applied_after_first_run

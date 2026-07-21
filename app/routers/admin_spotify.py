@@ -7,12 +7,14 @@ from fastapi.responses import RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_cipher, get_db, get_http_client
+from app.security.session import require_onboarded_admin
 from app.services.crypto import TokenCipher
 from app.spotify.oauth import build_authorize_url, exchange_code_for_token
 from app.spotify.token_store import load_tokens, save_tokens
 
-# Unauthenticated for now — Phase 2 wraps /admin/* routes with session-auth middleware (SPEC.md §6.3).
-router = APIRouter(prefix="/admin/spotify")
+router = APIRouter(
+    prefix="/admin/spotify", dependencies=[Depends(require_onboarded_admin)]
+)
 
 STATE_COOKIE_NAME = "spotify_oauth_state"
 
