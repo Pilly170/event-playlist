@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from app.dependencies import get_db
+from app.dependencies import get_database_path, get_db
 from app.models.admin_users import get_by_username, record_login, update_password
 from app.models.audit_log import write_audit_log
 from app.security.auth import hash_password, verify_password
 from app.security.session import log_in, log_out, require_admin
+from app.services.admin_seed import clear_initial_admin_password_file
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
@@ -59,10 +60,12 @@ async def change_password_submit(
     new_password: str = Form(...),
     username: str = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db),
+    database_path: str = Depends(get_database_path),
 ) -> Response:
     update_password(db, username, hash_password(new_password))
     record_login(db, username)
     write_audit_log(db, actor=username, action="password.changed")
+    clear_initial_admin_password_file(database_path)
     return RedirectResponse("/admin/config", status_code=303)
 
 

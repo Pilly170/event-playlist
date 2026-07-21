@@ -2,10 +2,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db import get_connection, run_migrations
-from app.dependencies import get_db
+from app.dependencies import get_database_path, get_db
 from app.main import app
 from app.models.admin_users import create_admin_user, get_by_username
 from app.security.auth import hash_password
+from app.services.admin_seed import initial_admin_password_path
 
 
 @pytest.fixture
@@ -27,6 +28,7 @@ def client(db_path):
             conn.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_database_path] = lambda: db_path
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -134,6 +136,18 @@ def test_completing_password_change_marks_admin_onboarded_and_allows_config_acce
     conn = get_connection(db_path)
     user = get_by_username(conn, "admin")
     assert user.last_login_at is not None
+
+
+def test_completing_password_change_deletes_the_initial_password_file(client, db_path):
+    _seed_admin(db_path, onboarded=False)
+    password_file = initial_admin_password_path(db_path)
+    password_file.parent.mkdir(parents=True, exist_ok=True)
+    password_file.write_text("seed-password\n")
+    client.post("/admin/login", data={"username": "admin", "password": "seed-password"})
+
+    client.post("/admin/change-password", data={"new_password": "brand-new-password"})
+
+    assert not password_file.exists()
 
 
 def test_logout_clears_session(client, db_path):
