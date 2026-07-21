@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.db import get_connection, run_migrations
-from app.routers import admin_auth, admin_config, admin_spotify, healthz
+from app.routers import admin_auth, admin_config, admin_spotify, healthz, public_form
 from app.services.admin_seed import seed_default_admin_if_needed
 
 APP_DIR = Path(__file__).parent
@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
         SessionMiddleware,
         secret_key=settings.session_secret_key,
         same_site="strict",
-        https_only=settings.session_cookie_secure,
+        https_only=settings.secure_cookies,
         max_age=ADMIN_SESSION_MAX_AGE_SECONDS,
     )
     app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_auth.router)
     app.include_router(admin_config.router)
     app.include_router(admin_spotify.router)
+    app.include_router(public_form.router)
 
     @app.get("/")
     def placeholder(request: Request):

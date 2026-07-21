@@ -1,0 +1,8 @@
+<div>
+  <p>Your request has been submitted!</p>
+  {% if reference_code %}
+  <p>Your reference code: <strong>{{ reference_code }}</strong></p>
+  <p>Use this code to check your request's status later.</p>
+  {% endif %}
+  <p><a href="/request">Make another request</a></p>
+</div>

@@ -2,7 +2,7 @@
 
 A self-contained web app that lets venue attendees request songs, queues them for admin approval, and inserts approved tracks into a live Spotify playlist. See [`SPEC.md`](./SPEC.md) for the full spec-driven build plan and [`CLAUDE.md`](./CLAUDE.md) for an architecture summary.
 
-This repository is currently at **Phase 1** of the build plan (SPEC.md §11) — scaffold plus Spotify OAuth and encrypted token storage. See [`CLAUDE.md`](./CLAUDE.md) for what's implemented so far.
+This repository is currently at **Phase 3** of the build plan (SPEC.md §11) — scaffold, Spotify OAuth, admin auth/config, and the public song-request form. See [`CLAUDE.md`](./CLAUDE.md) for what's implemented so far.
 
 ## Local development
 
