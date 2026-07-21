@@ -220,3 +220,9 @@ def test_playlist_pagination_shows_previous_link_on_later_pages(
     response = client.get("/menu/playlist", params={"offset": 20})
 
     assert "Previous" in response.text
+
+
+def test_menu_rejects_an_excessively_long_reference_code(client):
+    response = client.get("/menu", params={"code": "x" * 21})
+
+    assert response.status_code == 422

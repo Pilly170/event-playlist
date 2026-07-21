@@ -301,3 +301,9 @@ def test_submit_rejects_explicit_track_when_config_excludes_them(
     assert "be requested" in response.text
     conn = get_connection(db_path)
     assert conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0] == 0
+
+
+def test_search_rejects_an_excessively_long_query(client):
+    response = client.get("/request/search", params={"q": "x" * 101})
+
+    assert response.status_code == 422

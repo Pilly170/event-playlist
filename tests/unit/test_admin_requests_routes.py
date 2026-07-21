@@ -1,3 +1,5 @@
+import re
+
 import httpx2
 import pytest
 from cryptography.fernet import Fernet
@@ -121,6 +123,12 @@ def _mock_approval_flow(*, now_playing_uri, playlist_uris):
     return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
 
 
+def _extract_csrf_token(html: str) -> str:
+    match = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    assert match, "csrf_token hidden field not found in response"
+    return match.group(1)
+
+
 def test_requests_queue_redirects_to_login_when_not_authenticated(client):
     response = client.get("/admin/requests", follow_redirects=False)
 
@@ -153,9 +161,12 @@ def test_approve_succeeds_and_redirects(authenticated_client, db_path, cipher):
             "spotify:track:two",
         ],
     )
+    csrf_token = _extract_csrf_token(authenticated_client.get("/admin/requests").text)
 
     response = authenticated_client.post(
-        f"/admin/requests/{request.id}/approve", follow_redirects=False
+        f"/admin/requests/{request.id}/approve",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
     )
 
     assert response.status_code == 303
@@ -171,9 +182,12 @@ def test_approve_succeeds_and_redirects(authenticated_client, db_path, cipher):
 
 def test_approve_shows_error_when_no_playlist_configured(authenticated_client, db_path):
     request = _create_pending(db_path)
+    csrf_token = _extract_csrf_token(authenticated_client.get("/admin/requests").text)
 
     response = authenticated_client.post(
-        f"/admin/requests/{request.id}/approve", follow_redirects=True
+        f"/admin/requests/{request.id}/approve",
+        data={"csrf_token": csrf_token},
+        follow_redirects=True,
     )
 
     assert "No default playlist" in response.text
@@ -186,11 +200,40 @@ def test_approve_shows_error_when_no_playlist_configured(authenticated_client, d
 
 def test_deny_removes_request_and_redirects(authenticated_client, db_path):
     request = _create_pending(db_path)
+    csrf_token = _extract_csrf_token(authenticated_client.get("/admin/requests").text)
 
     response = authenticated_client.post(
-        f"/admin/requests/{request.id}/deny", follow_redirects=False
+        f"/admin/requests/{request.id}/deny",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
     )
 
     assert response.status_code == 303
     conn = get_connection(db_path)
     assert conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0] == 0
+
+
+def test_approve_rejects_missing_csrf_token(authenticated_client, db_path):
+    request = _create_pending(db_path)
+
+    response = authenticated_client.post(f"/admin/requests/{request.id}/approve")
+
+    assert response.status_code == 422
+    conn = get_connection(db_path)
+    status = conn.execute(
+        "SELECT status FROM requests WHERE id = ?", (request.id,)
+    ).fetchone()[0]
+    assert status == "pending"
+
+
+def test_deny_rejects_wrong_csrf_token(authenticated_client, db_path):
+    request = _create_pending(db_path)
+    authenticated_client.get("/admin/requests")
+
+    response = authenticated_client.post(
+        f"/admin/requests/{request.id}/deny", data={"csrf_token": "not-the-right-token"}
+    )
+
+    assert response.status_code == 403
+    conn = get_connection(db_path)
+    assert conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0] == 1

@@ -1,7 +1,7 @@
 import sqlite3
 
 import httpx2
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
@@ -21,7 +21,7 @@ PLAYLIST_PAGE_SIZE = 20
 @router.get("")
 async def menu(
     request: Request,
-    code: str = "",
+    code: str = Query("", max_length=20),
     db: sqlite3.Connection = Depends(get_db),
     cipher: TokenCipher = Depends(get_cipher),
     client: httpx2.AsyncClient = Depends(get_http_client),

@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -45,6 +47,12 @@ def _seed_admin(
         )
         conn.commit()
     conn.close()
+
+
+def _extract_csrf_token(html: str) -> str:
+    match = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    assert match, "csrf_token hidden field not found in response"
+    return match.group(1)
 
 
 def test_login_form_renders(client):
@@ -121,10 +129,11 @@ def test_completing_password_change_marks_admin_onboarded_and_allows_config_acce
 ):
     _seed_admin(db_path, onboarded=False)
     client.post("/admin/login", data={"username": "admin", "password": "seed-password"})
+    csrf_token = _extract_csrf_token(client.get("/admin/change-password").text)
 
     change_response = client.post(
         "/admin/change-password",
-        data={"new_password": "brand-new-password"},
+        data={"new_password": "brand-new-password", "csrf_token": csrf_token},
         follow_redirects=False,
     )
     assert change_response.status_code == 303
@@ -144,8 +153,12 @@ def test_completing_password_change_deletes_the_initial_password_file(client, db
     password_file.parent.mkdir(parents=True, exist_ok=True)
     password_file.write_text("seed-password\n")
     client.post("/admin/login", data={"username": "admin", "password": "seed-password"})
+    csrf_token = _extract_csrf_token(client.get("/admin/change-password").text)
 
-    client.post("/admin/change-password", data={"new_password": "brand-new-password"})
+    client.post(
+        "/admin/change-password",
+        data={"new_password": "brand-new-password", "csrf_token": csrf_token},
+    )
 
     assert not password_file.exists()
 
@@ -153,9 +166,53 @@ def test_completing_password_change_deletes_the_initial_password_file(client, db
 def test_logout_clears_session(client, db_path):
     _seed_admin(db_path, onboarded=True)
     client.post("/admin/login", data={"username": "admin", "password": "seed-password"})
+    csrf_token = _extract_csrf_token(client.get("/admin/config").text)
 
-    client.post("/admin/logout")
+    client.post("/admin/logout", data={"csrf_token": csrf_token})
 
     response = client.get("/admin/config", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == "/admin/login"
+
+
+def test_change_password_rejects_missing_csrf_token(client, db_path):
+    _seed_admin(db_path, onboarded=True)
+    client.post("/admin/login", data={"username": "admin", "password": "seed-password"})
+
+    response = client.post(
+        "/admin/change-password", data={"new_password": "brand-new-password"}
+    )
+
+    assert response.status_code == 422
+
+
+def test_logout_rejects_wrong_csrf_token(client, db_path):
+    _seed_admin(db_path, onboarded=True)
+    client.post("/admin/login", data={"username": "admin", "password": "seed-password"})
+    client.get("/admin/config")
+
+    response = client.post("/admin/logout", data={"csrf_token": "not-the-right-token"})
+
+    assert response.status_code == 403
+    # session must still be intact — a forged logout must not have gone through
+    page = client.get("/admin/config", follow_redirects=False)
+    assert page.status_code == 200
+
+
+def test_login_is_locked_out_after_repeated_failures(client, db_path):
+    _seed_admin(db_path, onboarded=True)
+    for _ in range(5):
+        client.post("/admin/login", data={"username": "admin", "password": "wrong"})
+
+    response = client.post(
+        "/admin/login", data={"username": "admin", "password": "seed-password"}
+    )
+
+    assert response.status_code == 429
+    assert "Too many failed login attempts" in response.text
+
+    conn = get_connection(db_path)
+    blocked_entries = conn.execute(
+        "SELECT COUNT(*) FROM audit_log WHERE action = 'login.blocked' AND actor = 'admin'"
+    ).fetchone()[0]
+    assert blocked_entries == 1

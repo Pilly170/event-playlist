@@ -23,3 +23,7 @@ body {
 .error {
   color: darkred;
 }
+
+.inline-form {
+  display: inline;
+}

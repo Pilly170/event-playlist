@@ -1,7 +1,7 @@
 import sqlite3
 
 import httpx2
-from fastapi import APIRouter, Depends, Form, Request, Response
+from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
@@ -33,7 +33,7 @@ async def request_form(request: Request) -> Response:
 @router.get("/search")
 async def search(
     request: Request,
-    q: str = "",
+    q: str = Query("", max_length=100),
     db: sqlite3.Connection = Depends(get_db),
     cipher: TokenCipher = Depends(get_cipher),
     client: httpx2.AsyncClient = Depends(get_http_client),

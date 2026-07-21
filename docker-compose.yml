@@ -35,6 +35,9 @@ services:
       - app_data:/data
     expose:
       - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
 
 volumes:
   caddy_data:
