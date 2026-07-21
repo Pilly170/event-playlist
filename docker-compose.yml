@@ -8,22 +8,24 @@ services:
       context: https://github.com/Pilly170/event-playlist.git#main
       dockerfile: caddy.Dockerfile
     restart: unless-stopped
-    # Do not use ports 80/443 — a pre-existing, unrelated native Traefik process on
-    # this specific VPS (nothing to do with Hostinger's platform itself, nor with this
-    # project — see CLAUDE.md) already owns those. A single-value port form (letting
-    # Docker auto-assign an arbitrary host port) was tried first, matching how sibling
-    # projects on this host are set up, but that breaks Spotify's OAuth redirect URI
-    # (which must exactly match a fixed, registered value) and gives attendees no
-    # stable URL — the port changes on every redeploy. 8443 was confirmed free via
-    # `sudo ss -tlnp` on the actual VPS before picking it; update this (and
-    # SPOTIFY_REDIRECT_URI in Hostinger's panel) together if it ever conflicts.
-    ports:
-      - "8443:80"
+    # No published port at all: a separate, already-deployed Traefik project on this
+    # VPS (see /docker/traefik/docker-compose.yml on the host, CLAUDE.md has the full
+    # story) runs with network_mode: host and --providers.docker=true — it reaches any
+    # container directly via the Docker socket/bridge network without needing a
+    # published host port or a shared network, and issues a real Let's Encrypt
+    # certificate via the labels below. --providers.docker.exposedbydefault=false
+    # means nothing is routed unless traefik.enable=true is set explicitly.
     volumes:
       - caddy_data:/data
       - caddy_config:/config
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.event-playlist.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.event-playlist.entrypoints=websecure
+      - traefik.http.routers.event-playlist.tls.certresolver=letsencrypt
+      - traefik.http.services.event-playlist.loadbalancer.server.port=80
     depends_on:
       - app
 
