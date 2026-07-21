@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Playlist{% endblock %}
+{% block content %}
+<h1>Playlist</h1>
+<p><a href="/menu">Back to menu</a></p>
+
+{% if not configured %}
+  <p>No playlist has been configured yet.</p>
+{% elif error %}
+  <p class="error">{{ error }}</p>
+{% else %}
+  <ol start="{{ page.offset + 1 }}">
+    {% for track in page.items %}
+    <li>
+      {% if track.album_image_url %}<img src="{{ track.album_image_url }}" alt="" width="48" height="48">{% endif %}
+      <strong>{{ track.name }}</strong> — {{ track.artist }}
+      {% if track.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+
+  <p>
+    {% if has_previous %}<a href="/menu/playlist?offset={{ previous_offset }}">Previous</a>{% endif %}
+    {% if has_previous and has_next %} | {% endif %}
+    {% if has_next %}<a href="/menu/playlist?offset={{ next_offset }}">Next</a>{% endif %}
+  </p>
+{% endif %}
+{% endblock %}
