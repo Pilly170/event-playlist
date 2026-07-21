@@ -1,6 +1,7 @@
 # Auto-applied by `docker compose` alongside docker-compose.yml for local development only.
 # Overrides the git-context build (required for Hostinger's deploy path, see docker-compose.yml)
-# with a local build context, and exposes the app port directly without Caddy.
+# with a local build context, and restores direct host-port publishing for caddy, which
+# production omits in favor of Hostinger's Traefik-based ingress (see docker-compose.yml).
 
 services:
   app:
@@ -16,3 +17,14 @@ services:
     build:
       context: .
       dockerfile: caddy.Dockerfile
+    # No Traefik running locally — publish the port directly instead of relying on
+    # the traefik-proxy network/labels, which only apply on the real Hostinger host.
+    ports:
+      - "80:80"
+
+networks:
+  # Hostinger's Traefik template creates this network in production; locally there's
+  # no such pre-existing network, so let compose create an ordinary one instead of
+  # failing with "network traefik-proxy declared as external, but could not be found".
+  traefik-proxy:
+    external: false
