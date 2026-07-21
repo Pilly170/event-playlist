@@ -205,6 +205,53 @@ async def get_track(
     return _track_json_to_result(response.json())
 
 
+async def set_repeat_mode(
+    conn: sqlite3.Connection,
+    cipher: TokenCipher,
+    client: httpx2.AsyncClient,
+    *,
+    client_id: str,
+    client_secret: str,
+    enabled: bool,
+) -> None:
+    access_token = await get_valid_access_token(
+        conn, cipher, client, client_id=client_id, client_secret=client_secret
+    )
+    response = await client.put(
+        f"{API_BASE_URL}/me/player/repeat",
+        params={"state": "context" if enabled else "off"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    response.raise_for_status()
+
+
+async def delete_track_from_playlist(
+    conn: sqlite3.Connection,
+    cipher: TokenCipher,
+    client: httpx2.AsyncClient,
+    *,
+    client_id: str,
+    client_secret: str,
+    playlist_id: str,
+    track_uri: str,
+    position: int,
+) -> str:
+    # Removed by position, not URI alone — the same URI can legitimately appear more
+    # than once in the playlist (SPEC.md §5), so removing "by URI" risks deleting the
+    # wrong occurrence.
+    access_token = await get_valid_access_token(
+        conn, cipher, client, client_id=client_id, client_secret=client_secret
+    )
+    response = await client.request(
+        "DELETE",
+        f"{API_BASE_URL}/playlists/{playlist_id}/tracks",
+        json={"tracks": [{"uri": track_uri, "positions": [position]}]},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    response.raise_for_status()
+    return response.json()["snapshot_id"]
+
+
 def _track_json_to_result(track: dict) -> TrackResult:
     images = track.get("album", {}).get("images", [])
     return TrackResult(

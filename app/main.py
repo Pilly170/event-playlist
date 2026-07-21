@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,6 +21,8 @@ from app.routers import (
     public_menu,
 )
 from app.services.admin_seed import seed_default_admin_if_needed
+from app.services.crypto import TokenCipher
+from app.worker.poller import poll_forever
 
 APP_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
@@ -35,7 +39,29 @@ async def lifespan(app: FastAPI):
     conn.close()
 
     app.state.http_client = httpx2.AsyncClient()
+
+    # Single in-process asyncio task, not a separate service — SPEC.md §2/§6.4
+    # require the app to run as exactly one process (uvicorn --workers 1, one
+    # container replica) specifically because of this poller. Running multiple
+    # workers/replicas would start it multiple times, duplicating Spotify API
+    # calls and racing playlist edits from independent pollers.
+    poller_stop_event = asyncio.Event()
+    poller_task = asyncio.create_task(
+        poll_forever(
+            settings.database_path,
+            TokenCipher(key=settings.token_encryption_key),
+            app.state.http_client,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+            stop_event=poller_stop_event,
+        )
+    )
+
     yield
+
+    poller_stop_event.set()
+    with contextlib.suppress(asyncio.CancelledError):
+        await poller_task
     await app.state.http_client.aclose()
 
 
