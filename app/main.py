@@ -4,9 +4,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx2
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
@@ -25,7 +25,6 @@ from app.services.crypto import TokenCipher
 from app.worker.poller import poll_forever
 
 APP_DIR = Path(__file__).parent
-templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
 ADMIN_SESSION_MAX_AGE_SECONDS = 8 * 60 * 60
 
@@ -84,8 +83,8 @@ def create_app() -> FastAPI:
     app.include_router(public_menu.router)
 
     @app.get("/")
-    def placeholder(request: Request):
-        return templates.TemplateResponse(request, "placeholder.html")
+    def root() -> RedirectResponse:
+        return RedirectResponse("/request")
 
     return app
 

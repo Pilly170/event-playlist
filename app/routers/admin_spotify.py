@@ -2,8 +2,9 @@ import secrets
 import sqlite3
 
 import httpx2
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.dependencies import get_cipher, get_db, get_http_client
@@ -15,8 +16,21 @@ from app.spotify.token_store import load_tokens, save_tokens
 router = APIRouter(
     prefix="/admin/spotify", dependencies=[Depends(require_onboarded_admin)]
 )
+templates = Jinja2Templates(directory="app/templates")
 
 STATE_COOKIE_NAME = "spotify_oauth_state"
+
+
+@router.get("")
+async def spotify_page(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+    cipher: TokenCipher = Depends(get_cipher),
+) -> Response:
+    stored = load_tokens(db, cipher)
+    return templates.TemplateResponse(
+        request, "admin/spotify_status.html", {"stored": stored}
+    )
 
 
 @router.get("/connect")
@@ -62,7 +76,7 @@ async def callback(
         expires_in=token["expires_in"],
         scope=token.get("scope", ""),
     )
-    response = RedirectResponse("/admin/spotify/status", status_code=302)
+    response = RedirectResponse("/admin/spotify", status_code=302)
     response.delete_cookie(STATE_COOKIE_NAME)
     return response
 

@@ -1,37 +1,35 @@
 {% extends "base.html" %}
 {% block title %}Admin config{% endblock %}
 {% block content %}
+{% include "admin/_nav.html" %}
+<span class="eyebrow">House Rules</span>
 <h1>Config</h1>
 <form method="post" action="/admin/config">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <label>
     <input type="checkbox" name="require_admin_approval" value="true" {% if config.require_admin_approval %}checked{% endif %}>
     Require admin approval before adding
-  </label><br>
+  </label>
   <label>
     <input type="checkbox" name="exclude_explicit" value="true" {% if config.exclude_explicit %}checked{% endif %}>
     Exclude explicit tracks
-  </label><br>
+  </label>
   <label>
     Default playlist ID
     <input type="text" name="default_playlist_id" value="{{ config.default_playlist_id or '' }}">
-  </label><br>
+  </label>
   <label>
     Insert requests this many tracks ahead of current
     <input type="number" name="insert_tracks_ahead" value="{{ config.insert_tracks_ahead }}" min="0" required>
-  </label><br>
+  </label>
   <label>
     <input type="checkbox" name="playlist_repeat_enabled" value="true" {% if config.playlist_repeat_enabled %}checked{% endif %}>
     Playlist repeat enabled
-  </label><br>
+  </label>
   <label>
     Poll interval (seconds)
     <input type="number" name="poll_interval_seconds" value="{{ config.poll_interval_seconds }}" min="1" required>
-  </label><br>
-  <button type="submit">Save</button>
-</form>
-<form method="post" action="/admin/logout">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button type="submit">Log out</button>
+  </label>
+  <button type="submit">Save settings</button>
 </form>
 {% endblock %}

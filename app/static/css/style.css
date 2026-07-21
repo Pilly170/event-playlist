@@ -1,10 +1,426 @@
-body {
-  font-family: system-ui, sans-serif;
-  max-width: 40rem;
-  margin: 4rem auto;
-  padding: 0 1rem;
-  color: #1a1a1a;
+/* ============================================================
+   Request Rail — a venue song-request system styled after the
+   paper request slips and order tickets it replaces.
+   ============================================================ */
+
+:root {
+  --paper: #ede7d9;
+  --paper-raised: #f7f3e8;
+  --ink: #22271f;
+  --ink-soft: #5b6357;
+  --border: #c9bfa0;
+  --stamp-green: #3f6b4a;
+  --stamp-red: #a63b2e;
+  --marquee-amber: #c97f1e;
+
+  --font-display: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-body: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1b1d18;
+    --paper-raised: #242720;
+    --ink: #ede7d9;
+    --ink-soft: #a7ac9c;
+    --border: #3a3d33;
+    --stamp-green: #6fa07e;
+    --stamp-red: #d97462;
+    --marquee-amber: #e3a94c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--paper);
+  color: var(--ink);
+  max-width: 38rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 5rem;
+  line-height: 1.5;
+  font-size: 16px;
+}
+
+a {
+  color: var(--stamp-green);
+}
+
+/* ---- Type ---- */
+
+.eyebrow {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 0.5rem;
+}
+
+.eyebrow::before,
+.eyebrow::after {
+  content: "·";
+  margin: 0 0.5em;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 1.6rem;
+  margin: 0 0 1.5rem;
+}
+
+h2 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+  margin: 2rem 0 0.75rem;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* ---- Forms ---- */
+
+label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+input[type="text"],
+input[type="search"],
+input[type="password"],
+input[type="number"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.6rem 0.7rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+input[type="checkbox"] {
+  margin-right: 0.4rem;
+  accent-color: var(--stamp-green);
+}
+
+input:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--marquee-amber);
+  outline-offset: 2px;
+}
+
+button {
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.65rem 1.1rem;
+  border-radius: 2px;
+  border: 1.5px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  transition: transform 0.05s ease-out;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.button-link {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.85rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 2px;
+  border: 1.5px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: none;
+}
+
+.button-link:hover {
+  opacity: 0.9;
+}
+
+button.stamp-approve {
+  border-color: var(--stamp-green);
+  background: transparent;
+  color: var(--stamp-green);
+}
+
+button.stamp-deny {
+  border-color: var(--stamp-red);
+  background: transparent;
+  color: var(--stamp-red);
+}
+
+.inline-form {
+  display: inline-block;
+}
+
+/* ---- Ticket rows (search results, playlist, requests) ---- */
+
+.ticket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ticket-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 0.9rem;
+  margin-bottom: 0.6rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  border-left: 3px dashed var(--border);
+}
+
+.ticket-row img {
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ticket-row .track-number {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.ticket-row .ticket-meta {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.ticket-row .ticket-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-name,
+.track-artist {
+  font-family: var(--font-mono);
+  display: block;
+}
+
+.track-name {
+  font-weight: 600;
+}
+
+.track-artist {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.ticket-row form {
+  flex-shrink: 0;
+}
+
+.explicit-badge {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stamp-red);
+  border: 1px solid var(--stamp-red);
+  padding: 0.05em 0.4em;
+  border-radius: 2px;
+  margin-left: 0.4em;
+}
+
+/* ---- Now playing marquee ---- */
+
+.marquee {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.marquee-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--marquee-amber);
+  flex-shrink: 0;
+  animation: marquee-pulse 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-dot {
+    animation: none;
+  }
+}
+
+@keyframes marquee-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.marquee .track-name,
+.marquee .track-artist {
+  display: inline;
+}
+
+/* ---- Ticket stub (reference code — signature element) ---- */
+
+.ticket-stub {
+  position: relative;
+  background: var(--paper-raised);
+  border: 1px dashed var(--border);
+  padding: 1.25rem 1.5rem;
+  margin: 1.25rem 0;
+  text-align: center;
+}
+
+.ticket-stub::before,
+.ticket-stub::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 1rem;
+  height: 1rem;
+  background: var(--paper);
+  border: 1px dashed var(--border);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.ticket-stub::before {
+  left: -0.5rem;
+}
+
+.ticket-stub::after {
+  right: -0.5rem;
+}
+
+.ticket-stub .stub-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 0.5rem;
+}
+
+.ticket-stub .stub-code {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 2rem;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+}
+
+/* ---- Status tags ---- */
+
+.status-tag {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15em 0.5em;
+  border-radius: 2px;
+}
+
+.status-tag.pending {
+  color: var(--marquee-amber);
+  border: 1px solid var(--marquee-amber);
+}
+
+.status-tag.added {
+  color: var(--stamp-green);
+  border: 1px solid var(--stamp-green);
+}
+
+/* ---- Admin nav ---- */
+
+.admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: center;
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-nav a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.admin-nav a:hover {
+  color: var(--stamp-green);
+}
+
+.admin-nav form {
+  margin: 0;
+}
+
+.admin-nav button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.admin-nav button:hover {
+  color: var(--stamp-red);
+}
+
+/* ---- Misc ---- */
 
 .hp-field {
   position: absolute;
@@ -14,6 +430,9 @@ body {
 
 .htmx-indicator {
   opacity: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
 }
 
 .htmx-request .htmx-indicator {
@@ -21,9 +440,11 @@ body {
 }
 
 .error {
-  color: darkred;
+  color: var(--stamp-red);
+  font-weight: 600;
 }
 
-.inline-form {
-  display: inline;
+.empty-state {
+  color: var(--ink-soft);
+  font-style: italic;
 }

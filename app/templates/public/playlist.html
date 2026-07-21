@@ -1,28 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Playlist{% endblock %}
 {% block content %}
+<span class="eyebrow">The Full Roll</span>
 <h1>Playlist</h1>
 <p><a href="/menu">Back to menu</a></p>
 
 {% if not configured %}
-  <p>No playlist has been configured yet.</p>
+  <p class="empty-state">No playlist has been configured yet.</p>
 {% elif error %}
   <p class="error">{{ error }}</p>
 {% else %}
-  <ol start="{{ page.offset + 1 }}">
+  <ul class="ticket-list">
     {% for track in page.items %}
-    <li>
-      {% if track.album_image_url %}<img src="{{ track.album_image_url }}" alt="" width="48" height="48">{% endif %}
-      <strong>{{ track.name }}</strong> — {{ track.artist }}
-      {% if track.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
+    <li class="ticket-row">
+      <span class="mono track-number">№{{ "%03d"|format(page.offset + loop.index) }}</span>
+      {% if track.album_image_url %}<img src="{{ track.album_image_url }}" alt="" width="40" height="40">{% endif %}
+      <span class="ticket-details">
+        <span class="track-name">{{ track.name }}</span>
+        <span class="track-artist">{{ track.artist }}</span>
+        {% if track.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
+      </span>
     </li>
     {% endfor %}
-  </ol>
+  </ul>
 
   <p>
-    {% if has_previous %}<a href="/menu/playlist?offset={{ previous_offset }}">Previous</a>{% endif %}
-    {% if has_previous and has_next %} | {% endif %}
-    {% if has_next %}<a href="/menu/playlist?offset={{ next_offset }}">Next</a>{% endif %}
+    {% if has_previous %}<a href="/menu/playlist?offset={{ previous_offset }}">← Previous</a>{% endif %}
+    {% if has_previous and has_next %} &nbsp;|&nbsp; {% endif %}
+    {% if has_next %}<a href="/menu/playlist?offset={{ next_offset }}">Next →</a>{% endif %}
   </p>
 {% endif %}
 {% endblock %}

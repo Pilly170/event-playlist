@@ -1,29 +1,37 @@
 {% extends "base.html" %}
 {% block title %}Menu{% endblock %}
 {% block content %}
-<h1>Now Playing</h1>
+<span class="eyebrow">Live at the Venue</span>
+<h1>Menu</h1>
+
 {% if now_playing_error %}
   <p class="error">{{ now_playing_error }}</p>
 {% elif now_playing %}
-  <p>
-    {% if now_playing.track.album_image_url %}<img src="{{ now_playing.track.album_image_url }}" alt="" width="64" height="64">{% endif %}
-    <strong>{{ now_playing.track.name }}</strong> — {{ now_playing.track.artist }}
-    {% if not now_playing.is_playing %}(paused){% endif %}
-  </p>
+  <div class="marquee">
+    <span class="marquee-dot" aria-hidden="true"></span>
+    {% if now_playing.track.album_image_url %}<img src="{{ now_playing.track.album_image_url }}" alt="" width="48" height="48">{% endif %}
+    <span>
+      <span class="track-name">{{ now_playing.track.name }}</span> —
+      <span class="track-artist">{{ now_playing.track.artist }}{% if not now_playing.is_playing %} (paused){% endif %}</span>
+    </span>
+  </div>
 {% else %}
-  <p>Nothing is currently playing.</p>
+  <p class="empty-state">Nothing is currently playing.</p>
 {% endif %}
 
 <h2>Check Your Request</h2>
 <form method="get" action="/menu">
-  <label>Reference code <input type="text" name="code" value="{{ code }}" maxlength="6" autocomplete="off"></label>
+  <label>Reference code <input type="text" name="code" value="{{ code }}" maxlength="6" autocomplete="off" placeholder="e.g. AB3XQ7"></label>
   <button type="submit">Check status</button>
 </form>
 {% if searched %}
   {% if status_result %}
-    <p>Status: <strong>{{ status_result.status }}</strong> — {{ status_result.track_name }} by {{ status_result.artist_name }}</p>
+    <p>
+      Status: <span class="status-tag {{ status_result.status }}">{{ status_result.status }}</span>
+      — <span class="mono">{{ status_result.track_name }} by {{ status_result.artist_name }}</span>
+    </p>
   {% else %}
-    <p>Not found — this code doesn't match a pending or added request.</p>
+    <p class="empty-state">Not found — this code doesn't match a pending or added request.</p>
   {% endif %}
 {% endif %}
 

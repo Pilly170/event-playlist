@@ -1,8 +1,12 @@
 <div>
-  <p>Your request has been submitted!</p>
+  <span class="eyebrow">On The List</span>
+  <p>Your request is in. The DJ's got it.</p>
   {% if reference_code %}
-  <p>Your reference code: <strong>{{ reference_code }}</strong></p>
-  <p>Use this code to check your request's status later.</p>
+  <div class="ticket-stub">
+    <span class="stub-label">Your reference code</span>
+    <span class="stub-code">{{ reference_code }}</span>
+  </div>
+  <p>Check the <a href="/menu">menu</a> anytime to see if it's queued.</p>
   {% endif %}
-  <p><a href="/request">Make another request</a></p>
+  <p><a href="/request">Request another song</a></p>
 </div>

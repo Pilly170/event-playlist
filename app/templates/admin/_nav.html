@@ -1,0 +1,9 @@
+<nav class="admin-nav">
+  <a href="/admin/requests">Requests</a>
+  <a href="/admin/config">Config</a>
+  <a href="/admin/spotify">Spotify</a>
+  <form method="post" action="/admin/logout" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">Log out</button>
+  </form>
+</nav>

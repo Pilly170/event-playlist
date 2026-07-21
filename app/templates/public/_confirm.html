@@ -1,14 +1,17 @@
 <div>
-  <h2>Confirm your request</h2>
-  {% if track.album_image_url %}<img src="{{ track.album_image_url }}" alt="" width="96" height="96">{% endif %}
-  <p>
-    <strong>{{ track.name }}</strong> — {{ track.artist }}
-    {% if track.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
-  </p>
+  <span class="eyebrow">Confirm</span>
+  <div class="ticket-row">
+    {% if track.album_image_url %}<img src="{{ track.album_image_url }}" alt="" width="64" height="64">{% endif %}
+    <span class="ticket-details">
+      <span class="track-name">{{ track.name }}</span>
+      <span class="track-artist">{{ track.artist }}</span>
+      {% if track.is_explicit %}<span class="explicit-badge">Explicit</span>{% endif %}
+    </span>
+  </div>
 
   <form hx-post="/request/submit" hx-target="#page-content" hx-swap="innerHTML">
     <input type="hidden" name="spotify_track_uri" value="{{ track.uri }}">
-    <label>Your name <input type="text" name="requestor_name" required maxlength="80"></label>
+    <label>Your name <input type="text" name="requestor_name" required maxlength="80" autofocus></label>
 
     <div aria-hidden="true" class="hp-field">
       <label>Leave this field blank
@@ -16,8 +19,8 @@
       </label>
     </div>
 
-    <button type="submit">Confirm request</button>
+    <button type="submit">Submit request</button>
   </form>
 
-  <p><a href="/request">Cancel</a></p>
+  <p><a href="/request">Cancel, search again</a></p>
 </div>
