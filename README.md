@@ -54,11 +54,13 @@ In Hostinger's Docker Manager, use **Compose from URL**, pointing at this repo's
 | `SPOTIFY_REDIRECT_URI` | the exact redirect URI you registered in step 1 |
 | `TOKEN_ENCRYPTION_KEY` | generated in step 3 |
 | `SESSION_SECRET_KEY` | generated in step 3 |
-| `DOMAIN` | a real domain pointed at this VPS's IP (or Hostinger's own auto-assigned VPS hostname, e.g. `srv1234567.hstgr.cloud`, if you don't have a custom one yet) — used in Traefik's `Host()` routing rule |
+| `DOMAIN` | a real domain pointed at this VPS's IP, **or** `<project-name>.<vps-hostname>.hstgr.cloud` (e.g. `event-playlist.srv1234567.hstgr.cloud`) if you don't have a custom domain yet — see below for why the bare VPS hostname alone isn't a good choice |
 | `SITE_ADDRESS` | `http://<same value as DOMAIN>` — Traefik terminates real TLS in front of this, so Caddy only ever serves plain HTTP internally |
 | `SECURE_COOKIES` | `true` once you've confirmed `https://<DOMAIN>` actually works end-to-end (see [TLS mode](#tls-mode)) |
 
 Click **Update** to build and start the stack, then visit `https://<DOMAIN>/request` to confirm it's live.
+
+**On using Hostinger's auto-assigned VPS hostname without a custom domain**: don't just use the bare hostname (e.g. `srv1234567.hstgr.cloud`) — if this VPS ever hosts more than one Traefik-routed project (check via `docker ps -a` and `docker inspect <container> --format '{{json .Config.Labels}}' | grep traefik` for existing projects), each one needs something distinct in its `Host()` rule to avoid a routing conflict. The established, already-working pattern on a shared Hostinger VPS is a **per-project subdomain** of the auto-assigned hostname — e.g. `event-playlist.srv1234567.hstgr.cloud` — confirmed via Hostinger's own wildcard DNS resolving arbitrary subdomains of `*.hstgr.cloud` with no extra setup needed, and Traefik issuing a separate valid Let's Encrypt cert per subdomain with zero conflict. This needs no app or `docker-compose.yml` changes — the app doesn't care what `Host` header it's reached by, unlike a path-prefix scheme (`/event-playlist/...`), which this app can't support without real code changes since every template/redirect uses root-absolute paths (`/static/...`, `/request`, etc.).
 
 **If a redeploy doesn't seem to pick up a code/config change**: Hostinger's Compose-from-URL has been observed re-writing the on-disk `docker-compose.yml` on "Update" but with stale content (possibly resolved once to a specific commit at project creation, not re-resolving `main` fresh every time) — if this happens, the most reliable fix is bypassing the panel: SSH in and check the file directly (Hostinger stores it at `/docker/<project-name>/docker-compose.yml`), overwrite it with the current `main` version if it's stale, then run `docker compose -f /docker/<project-name>/docker-compose.yml --project-directory /docker/<project-name> up -d --build` directly.
 
