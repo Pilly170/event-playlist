@@ -1,9 +1,9 @@
-# TLS termination mode is an open Phase 0 verification item (SPEC.md §9, §12.1): confirm
-# whether Hostinger's Docker product terminates TLS in front of the container before go-live.
-#
-# SITE_ADDRESS controls the toggle without a rebuild:
-#   - Hostinger does NOT terminate TLS: SITE_ADDRESS=yourdomain.example  (Caddy runs auto-HTTPS)
-#   - Hostinger DOES terminate TLS:     SITE_ADDRESS=http://yourdomain.example  (plain HTTP internally)
+# TLS is terminated upstream of this container in production — a separate Traefik
+# instance on the Hostinger VPS (see CLAUDE.md), which issues a real Let's Encrypt
+# certificate and forwards plain HTTP here. SITE_ADDRESS is always http://<domain> in
+# production; Caddy never attempts its own certificate. The bare-domain form (no
+# scheme) only matters for local dev, where SITE_ADDRESS defaults to http://localhost
+# below anyway.
 
 {$SITE_ADDRESS:http://localhost} {
 	reverse_proxy app:8000
@@ -19,4 +19,14 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Content-Security-Policy "default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	}
+
+	# HTML responses are dynamic (CSRF tokens on forms, live now-playing status) and
+	# must never be cached — a stale cached form would submit an expired CSRF token.
+	# Static assets rarely change and aren't cache-busted by filename, so a moderate
+	# TTL balances freshness against repeat-visit load time.
+	@static path /static/*
+	header @static Cache-Control "public, max-age=3600"
+
+	@dynamic not path /static/*
+	header @dynamic Cache-Control "no-store"
 }
