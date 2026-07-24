@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.db import get_connection, run_migrations
 from app.dependencies import get_cipher, get_db, get_http_client
 from app.main import app
+from app.models.audit_log import list_audit_log
 from app.security.session import require_onboarded_admin
 from app.services.crypto import TokenCipher
 
@@ -118,6 +119,76 @@ def test_spotify_page_shows_not_connected(client):
     assert response.status_code == 200
     assert "not connected" in response.text.lower()
     assert "/admin/spotify/connect" in response.text
+
+
+def test_spotify_page_renders_a_real_csrf_token(client):
+    response = client.get("/admin/spotify")
+
+    assert 'name="csrf_token" value=""' not in response.text
+
+
+def _connect_and_get_csrf_token(client, cipher):
+    async def handler(request):
+        return httpx2.Response(
+            200,
+            json={
+                "access_token": "access-1",
+                "refresh_token": "refresh-1",
+                "expires_in": 3600,
+                "scope": "playlist-read-private",
+            },
+        )
+
+    app.dependency_overrides[get_http_client] = lambda: httpx2.AsyncClient(
+        transport=httpx2.MockTransport(handler)
+    )
+    connect_response = client.get("/admin/spotify/connect", follow_redirects=False)
+    state_value = parse_qs(urlparse(connect_response.headers["location"]).query)[
+        "state"
+    ][0]
+    client.get(
+        "/admin/spotify/callback",
+        params={"code": "auth-code", "state": state_value},
+        follow_redirects=False,
+    )
+    page = client.get("/admin/spotify")
+    start = page.text.index('name="csrf_token" value="') + len(
+        'name="csrf_token" value="'
+    )
+    return page.text[start : page.text.index('"', start)]
+
+
+def test_disconnect_removes_stored_tokens(client, cipher):
+    csrf_token = _connect_and_get_csrf_token(client, cipher)
+
+    response = client.post(
+        "/admin/spotify/disconnect",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert client.get("/admin/spotify/status").json() == {"connected": False}
+
+
+def test_disconnect_writes_an_audit_log_entry(client, cipher, db_path):
+    csrf_token = _connect_and_get_csrf_token(client, cipher)
+
+    client.post("/admin/spotify/disconnect", data={"csrf_token": csrf_token})
+
+    conn = get_connection(db_path)
+    entries = list_audit_log(conn)
+    conn.close()
+    assert any(e.action == "spotify.disconnected" for e in entries)
+
+
+def test_disconnect_rejects_missing_csrf_token(client, cipher):
+    _connect_and_get_csrf_token(client, cipher)
+
+    response = client.post("/admin/spotify/disconnect", data={"csrf_token": "wrong"})
+
+    assert response.status_code == 403
+    assert client.get("/admin/spotify/status").json()["connected"] is True
 
 
 def test_spotify_page_shows_connected(client, cipher):

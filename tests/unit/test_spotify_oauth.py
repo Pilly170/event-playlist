@@ -26,6 +26,7 @@ def test_build_authorize_url_includes_client_id_redirect_and_state():
     assert query["redirect_uri"] == ["https://example.com/callback"]
     assert query["state"] == ["xyz"]
     assert query["response_type"] == ["code"]
+    assert query["show_dialog"] == ["true"]
 
 
 def test_build_authorize_url_requests_all_required_scopes():

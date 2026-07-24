@@ -22,6 +22,13 @@ def build_authorize_url(*, client_id: str, redirect_uri: str, state: str) -> str
         "redirect_uri": redirect_uri,
         "scope": " ".join(REQUIRED_SCOPES),
         "state": state,
+        # Without this, Spotify silently re-approves an already-granted, still-
+        # logged-in account and bounces straight back with no visible dialog at
+        # all — indistinguishable from the link doing nothing. Forces the consent
+        # screen to always render. It does not let the admin pick a different
+        # Spotify account (Spotify's OAuth has no such prompt); that still
+        # requires logging out of Spotify in the browser first.
+        "show_dialog": "true",
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
