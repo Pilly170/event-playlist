@@ -105,6 +105,20 @@ def test_login_with_correct_password_when_already_onboarded_redirects_to_config(
     assert response.headers["location"] == "/admin/config"
 
 
+def test_login_sets_session_cookie_with_samesite_lax_not_strict(client, db_path):
+    _seed_admin(db_path, onboarded=True)
+
+    response = client.post(
+        "/admin/login",
+        data={"username": "admin", "password": "seed-password"},
+        follow_redirects=False,
+    )
+
+    set_cookie = response.headers["set-cookie"].lower()
+    assert "samesite=lax" in set_cookie
+    assert "samesite=strict" not in set_cookie
+
+
 def test_config_page_redirects_to_login_when_not_authenticated(client):
     response = client.get("/admin/config", follow_redirects=False)
 
