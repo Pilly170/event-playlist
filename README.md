@@ -92,6 +92,31 @@ Make sure the playback hardware is playing that exact playlist, in order, with *
 
 You're live. Point people at `https://<your-domain>/request` to request songs, and `/menu` for now-playing / status lookup / the full playlist.
 
+## First use, after deployment
+
+Once the stack is up (whether this is the very first deploy, or a fresh redeploy after recreating the Hostinger project — which resets all env vars back to blank, a scenario worth planning for), here's the checklist to get from "container is running" to "actually usable":
+
+1. **Generate the two required secrets** (skip if they're already set and you didn't just recreate the project):
+   ```bash
+   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"   # TOKEN_ENCRYPTION_KEY
+   python3 -c "import secrets; print(secrets.token_urlsafe(32))"                                # SESSION_SECRET_KEY
+   ```
+   Set both in Hostinger's environment panel exactly as printed — no extra quotes or trailing whitespace. Leaving either blank crash-loops the app with `ValueError: Fernet key must be 32 url-safe base64-encoded bytes` (see [Troubleshooting](#troubleshooting-app-crash-looping-right-after-deploy) below).
+
+2. **Retrieve the seeded admin password**:
+   ```bash
+   docker exec event-playlist-app-1 cat /data/initial_admin_password.txt
+   ```
+   (run over SSH on the Hostinger VPS, or via its container shell/exec feature if it offers one). This file is written once at first boot with `0600` permissions, never logged in plaintext, and deletes itself automatically once step 3 below is complete.
+
+3. **Log in and set a real password**: go to `https://<DOMAIN>/admin/login`, username `admin`, the password from step 2 — you'll be forced to change it immediately.
+
+4. **Connect Spotify**: from the admin nav, go to **Spotify** → **Connect Spotify**, approve the consent screen.
+
+5. **Set the default playlist**: on the **Config** page, paste in the target playlist's ID (from its share link or URI — see [step 7](#7-set-the-default-playlist)), and review the other settings (insert-tracks-ahead, repeat mode, poll interval) while you're there.
+
+You're live at that point — `/request` and `/menu` are ready for real attendees.
+
 ## Releasing a change
 
 Deploys are **manual**, not automatic on merge — Hostinger's Compose-from-URL only re-fetches and rebuilds when you tell it to:
