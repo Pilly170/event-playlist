@@ -157,6 +157,14 @@ docker exec event-playlist-caddy-1 wget -qO- http://127.0.0.1:2019/config/
 
 The second command dumps Caddy's actual compiled routing rule (via its own admin API) — check the `"match":[{"host":[...]}]` value against the exact domain you're requesting through Traefik.
 
+### Troubleshooting: Spotify won't connect, or every Spotify API call fails
+
+**Spotify shows `redirect_uri: Not matching configuration`** when you click Connect Spotify: the Redirect URI registered in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) (app → Settings → Redirect URIs) doesn't match `SPOTIFY_REDIRECT_URI` character-for-character — scheme, host, and path all have to match exactly. This is easy to hit after changing domains (e.g. switching to the [per-project subdomain](#4-set-up-hostinger)) and forgetting to update the Dashboard side too.
+
+**Everything Spotify-related returns `403 Forbidden`** after connecting successfully (search results empty with a 500 in the app logs, the background poller logging repeated `403` errors for `/me/player/repeat`, etc.): a newly created Spotify app defaults to **Development Mode**, which restricts *all* API access to an explicit allowlist of up to 25 accounts — regardless of the scopes you approved on the consent screen. Add the Spotify account you connected with under the Dashboard's **User Management** section (app → Settings → User Management), then reconnect.
+
+**Clicking "Reconnect a different account" appears to do nothing, or bounces back to the admin login page**: fixed as of the session-cookie `SameSite` change (see `CLAUDE.md`) — `/admin/spotify/callback` is reached via a cross-site redirect from Spotify, which a `SameSite=Strict` cookie doesn't survive. If you're on an older deploy that still shows this, redeploy the current `main`.
+
 ## Deployment model
 
 Hosting is Hostinger's Docker product via **Compose-from-URL**: Hostinger fetches only `docker-compose.yml` itself, never the surrounding repo, so `app.build.context` has to be a git URL rather than a local path — and since that build path can't authenticate against a private repo, the repo has to be public (mitigated by GitHub's secret scanning/push protection, step 2 above). See [`CLAUDE.md`](./CLAUDE.md) for the rest of the architecture.
