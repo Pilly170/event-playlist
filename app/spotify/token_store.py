@@ -45,6 +45,11 @@ def save_tokens(
     conn.commit()
 
 
+def delete_tokens(conn: sqlite3.Connection) -> None:
+    conn.execute("DELETE FROM spotify_auth WHERE id = 1")
+    conn.commit()
+
+
 def load_tokens(conn: sqlite3.Connection, cipher: TokenCipher) -> StoredTokens | None:
     row = conn.execute(
         "SELECT access_token_enc, refresh_token_enc, expires_at, scope FROM spotify_auth WHERE id = 1"

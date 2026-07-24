@@ -9,7 +9,12 @@
   <p><span class="status-tag added">Connected</span></p>
   <p class="mono ticket-meta">Scopes: {{ stored.scope }}</p>
   <p class="mono ticket-meta">Token refreshes automatically until: {{ stored.expires_at.strftime("%Y-%m-%d %H:%M UTC") }}</p>
-  <p><a href="/admin/spotify/connect">Reconnect a different account</a></p>
+  <p><a href="/admin/spotify/connect">Reconnect Spotify</a></p>
+  <p class="mono ticket-meta">To connect a different account, log out of Spotify in this browser first — Spotify will otherwise silently reuse whichever account is already logged in.</p>
+  <form method="post" action="/admin/spotify/disconnect" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="stamp-deny">Disconnect Spotify</button>
+  </form>
 {% else %}
   <p><span class="status-tag pending">Not connected</span></p>
   <p>Connect the venue's Spotify account to enable search, the live playlist, and approvals.</p>

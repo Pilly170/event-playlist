@@ -8,10 +8,12 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.dependencies import get_cipher, get_db, get_http_client
+from app.models.audit_log import write_audit_log
+from app.security.csrf import get_or_create_csrf_token, verify_csrf_token
 from app.security.session import require_onboarded_admin
 from app.services.crypto import TokenCipher
 from app.spotify.oauth import build_authorize_url, exchange_code_for_token
-from app.spotify.token_store import load_tokens, save_tokens
+from app.spotify.token_store import delete_tokens, load_tokens, save_tokens
 
 router = APIRouter(
     prefix="/admin/spotify", dependencies=[Depends(require_onboarded_admin)]
@@ -29,7 +31,9 @@ async def spotify_page(
 ) -> Response:
     stored = load_tokens(db, cipher)
     return templates.TemplateResponse(
-        request, "admin/spotify_status.html", {"stored": stored}
+        request,
+        "admin/spotify_status.html",
+        {"stored": stored, "csrf_token": get_or_create_csrf_token(request)},
     )
 
 
@@ -79,6 +83,19 @@ async def callback(
     response = RedirectResponse("/admin/spotify", status_code=302)
     response.delete_cookie(STATE_COOKIE_NAME)
     return response
+
+
+@router.post("/disconnect")
+async def disconnect(
+    username: str = Depends(require_onboarded_admin),
+    db: sqlite3.Connection = Depends(get_db),
+    _csrf: None = Depends(verify_csrf_token),
+) -> RedirectResponse:
+    # Only forgets the app's own stored tokens — has no effect on the admin's
+    # Spotify.com browser session, which no third-party app can clear.
+    delete_tokens(db)
+    write_audit_log(db, actor=username, action="spotify.disconnected")
+    return RedirectResponse("/admin/spotify", status_code=303)
 
 
 @router.get("/status")

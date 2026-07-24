@@ -44,7 +44,12 @@ def _connected_cipher(conn):
 
 
 def _mock_client(
-    *, now_playing_uri, playlist_uris=(), repeat_calls=None, delete_calls=None
+    *,
+    now_playing_uri,
+    playlist_uris=(),
+    repeat_calls=None,
+    delete_calls=None,
+    repeat_status=204,
 ):
     async def handler(request):
         path = request.url.path
@@ -58,7 +63,9 @@ def _mock_client(
         if path.endswith("/me/player/repeat"):
             if repeat_calls is not None:
                 repeat_calls.append(dict(request.url.params))
-            return httpx2.Response(204)
+            if repeat_status >= 400:
+                return httpx2.Response(repeat_status, json={"error": "forbidden"})
+            return httpx2.Response(repeat_status)
         if path.endswith("/tracks") and method == "GET":
             offset = int(request.url.params.get("offset", 0))
             limit = int(request.url.params.get("limit", 100))
@@ -228,6 +235,44 @@ async def test_tick_removes_a_finished_app_inserted_track(tmp_path):
     assert updated_entry.played_at is not None
     assert updated_entry.removed_at is not None
     assert entry.id == updated_entry.id
+
+
+@pytest.mark.asyncio
+async def test_tick_continues_removal_when_repeat_mode_call_fails(tmp_path):
+    # Spotify 403s /me/player/repeat whenever there's no active playback device —
+    # a routine condition, not a reason to abort the rest of the tick.
+    conn = _connection(tmp_path)
+    cipher = _connected_cipher(conn)
+    update_config(conn, default_playlist_id="playlist123")
+    create_playlist_state_entry(
+        conn,
+        spotify_track_uri="spotify:track:finished",
+        source="request",
+        request_id=1,
+        inserted_position=0,
+        snapshot_id_at_insert="snap-insert",
+    )
+    delete_calls = []
+    client = _mock_client(
+        now_playing_uri="spotify:track:next",
+        playlist_uris=["spotify:track:finished", "spotify:track:next"],
+        delete_calls=delete_calls,
+        repeat_status=403,
+    )
+
+    result = await run_poll_tick(
+        conn,
+        cipher,
+        client,
+        client_id="id",
+        client_secret="secret",
+        last_known_uri="spotify:track:finished",
+    )
+
+    assert result == "spotify:track:next"
+    assert len(delete_calls) == 1
+    updated_entry = get_by_request_id(conn, 1)
+    assert updated_entry.removed_at is not None
 
 
 @pytest.mark.asyncio

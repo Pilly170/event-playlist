@@ -42,15 +42,22 @@ async def run_poll_tick(
 
     # Unconditional and idempotent on purpose: this is also what keeps the playlist
     # looping via Spotify's own repeat mechanism once it runs dry, rather than the
-    # worker needing separate "restart playback" logic (SPEC.md §6.4).
-    await set_repeat_mode(
-        conn,
-        cipher,
-        client,
-        client_id=client_id,
-        client_secret=client_secret,
-        enabled=config.playlist_repeat_enabled,
-    )
+    # worker needing separate "restart playback" logic (SPEC.md §6.4). Isolated in
+    # its own try/except because Spotify 403s this endpoint whenever there's no
+    # active playback device — that's a routine, expected condition, and letting it
+    # propagate would abort the rest of the tick (now-playing detection, finished-
+    # track cleanup) every time it happens.
+    try:
+        await set_repeat_mode(
+            conn,
+            cipher,
+            client,
+            client_id=client_id,
+            client_secret=client_secret,
+            enabled=config.playlist_repeat_enabled,
+        )
+    except httpx2.HTTPStatusError:
+        logger.warning("Failed to set repeat mode; continuing tick", exc_info=True)
 
     now_playing = await get_now_playing(
         conn, cipher, client, client_id=client_id, client_secret=client_secret
