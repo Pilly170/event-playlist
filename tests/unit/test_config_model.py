@@ -47,3 +47,19 @@ def test_update_config_rejects_unknown_field(tmp_path):
 
     with pytest.raises(ValueError):
         update_config(conn, not_a_real_field=True)
+
+
+def test_get_config_returns_pending_request_timeout_default(tmp_path):
+    conn = _connection(tmp_path)
+
+    config = get_config(conn)
+
+    assert config.pending_request_timeout_minutes == 15
+
+
+def test_update_config_changes_pending_request_timeout(tmp_path):
+    conn = _connection(tmp_path)
+
+    updated = update_config(conn, pending_request_timeout_minutes=30)
+
+    assert updated.pending_request_timeout_minutes == 30
