@@ -1,12 +1,17 @@
-# This is the file Hostinger's Compose-from-URL deploy path fetches directly (SPEC.md §9) —
-# it never clones the surrounding repo, so `app.build.context` must be a git URL, not `.`.
-# For local development, docker-compose.override.yml overrides this to build from the local tree.
+# This is the file Hostinger's Compose-from-URL deploy path fetches directly (SPEC.md §9).
+# Images are pre-built and pushed to GHCR by .github/workflows/publish-images.yml on every
+# merge to main, so this file just references those tags rather than building from a git
+# context — `docker compose up` only builds a build:-context image if it doesn't already
+# exist locally, so once built once, Hostinger's "Update" button (which just re-pulls/re-ups,
+# never rebuilds) kept silently redeploying a stale image no matter how many commits landed.
+# Referencing a registry image instead makes "Update" behave the same way it does for every
+# other project on this VPS (all of which use image:, not build:) — it actually re-pulls.
+# For local development, docker-compose.override.yml overrides this to build from the local
+# tree instead of pulling from GHCR.
 
 services:
   caddy:
-    build:
-      context: https://github.com/Pilly170/event-playlist.git#main
-      dockerfile: caddy.Dockerfile
+    image: ghcr.io/pilly170/event-playlist-caddy:latest
     restart: unless-stopped
     # No published port at all: a separate, already-deployed Traefik project on this
     # VPS (see /docker/traefik/docker-compose.yml on the host, CLAUDE.md has the full
@@ -30,9 +35,7 @@ services:
       - app
 
   app:
-    build:
-      context: https://github.com/Pilly170/event-playlist.git#main
-      dockerfile: Dockerfile
+    image: ghcr.io/pilly170/event-playlist-app:latest
     restart: unless-stopped
     environment:
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
