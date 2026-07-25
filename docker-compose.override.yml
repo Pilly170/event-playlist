@@ -1,7 +1,10 @@
 # Auto-applied by `docker compose` alongside docker-compose.yml for local development only.
-# Overrides the git-context build (required for Hostinger's deploy path, see docker-compose.yml)
-# with a local build context, and restores direct host-port publishing for caddy, which
-# production omits in favor of Hostinger's Traefik-based ingress (see docker-compose.yml).
+# Production references pre-built GHCR images (see docker-compose.yml); this overrides that
+# with a local build context instead, so `docker compose up --build` builds from the working
+# tree rather than pulling from the registry. Compose merges build: on top of a base image:
+# service just fine — it builds locally and tags the result with the base file's image name.
+# Also restores direct host-port publishing for caddy, which production omits in favor of
+# Hostinger's Traefik-based ingress (see docker-compose.yml).
 
 services:
   app:

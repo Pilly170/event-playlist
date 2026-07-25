@@ -27,7 +27,9 @@ https://<your-domain-or-vps-hostname>/admin/spotify/callback
 
 ### 2. Get this code onto a public GitHub repo
 
-Hostinger's Compose-from-URL deploy path fetches only `docker-compose.yml` directly from GitHub — it never clones the surrounding repo, so the repo has to be public for the build to authenticate at all (see [Deployment model](#deployment-model)). Push this repo there if you haven't already, then edit `docker-compose.yml`'s `app.build.context` to point at your repo's git URL instead of the placeholder.
+Hostinger's Compose-from-URL deploy path fetches only `docker-compose.yml` directly from GitHub — it never clones the surrounding repo, so the repo has to be public for the fetch to work at all (see [Deployment model](#deployment-model)). Push this repo there if you haven't already.
+
+`docker-compose.yml` references pre-built images (`ghcr.io/<owner>/event-playlist-app:latest`, `event-playlist-caddy:latest`) rather than building from source — `.github/workflows/publish-images.yml` builds and pushes those on every merge to `main`. If you fork this repo, update the `image:` lines to your own GHCR namespace, and make sure the packages are set to **public** visibility once the workflow has pushed them at least once (Hostinger's pull is unauthenticated, same as the repo fetch above).
 
 Enable **GitHub secret scanning and push protection** on the repo (Settings → Code security) — free for public repos, and the safety net for the fact that nothing here can ever be private.
 
@@ -62,7 +64,9 @@ Click **Update** to build and start the stack, then visit `https://<DOMAIN>/requ
 
 **On using Hostinger's auto-assigned VPS hostname without a custom domain**: don't just use the bare hostname (e.g. `srv1234567.hstgr.cloud`) — if this VPS ever hosts more than one Traefik-routed project (check via `docker ps -a` and `docker inspect <container> --format '{{json .Config.Labels}}' | grep traefik` for existing projects), each one needs something distinct in its `Host()` rule to avoid a routing conflict. The established, already-working pattern on a shared Hostinger VPS is a **per-project subdomain** of the auto-assigned hostname — e.g. `event-playlist.srv1234567.hstgr.cloud` — confirmed via Hostinger's own wildcard DNS resolving arbitrary subdomains of `*.hstgr.cloud` with no extra setup needed, and Traefik issuing a separate valid Let's Encrypt cert per subdomain with zero conflict. This needs no app or `docker-compose.yml` changes — the app doesn't care what `Host` header it's reached by, unlike a path-prefix scheme (`/event-playlist/...`), which this app can't support without real code changes since every template/redirect uses root-absolute paths (`/static/...`, `/request`, etc.).
 
-**If a redeploy doesn't seem to pick up a code/config change**: Hostinger's Compose-from-URL has been observed re-writing the on-disk `docker-compose.yml` on "Update" but with stale content (possibly resolved once to a specific commit at project creation, not re-resolving `main` fresh every time) — if this happens, the most reliable fix is bypassing the panel: SSH in and check the file directly (Hostinger stores it at `/docker/<project-name>/docker-compose.yml`), overwrite it with the current `main` version if it's stale, then run `docker compose -f /docker/<project-name>/docker-compose.yml --project-directory /docker/<project-name> up -d --build` directly.
+**If a redeploy doesn't seem to pick up a code/config change**: first confirm `publish-images.yml` actually ran and pushed for the commit you expect (Actions tab) and that the GHCR packages are public — a private package fails the pull silently from Hostinger's side. If that's all fine and "Update" still isn't picking up new content, Hostinger's Compose-from-URL has also been observed re-writing the on-disk `docker-compose.yml` with stale content on "Update" (possibly resolved once to a specific commit at project creation, not re-resolving `main` fresh every time) — bypass the panel: SSH in, check the file directly (Hostinger stores it at `/docker/<project-name>/docker-compose.yml`), overwrite it with the current `main` version if it's stale, then run `docker compose -f /docker/<project-name>/docker-compose.yml --project-directory /docker/<project-name> pull && docker compose -f /docker/<project-name>/docker-compose.yml --project-directory /docker/<project-name> up -d` directly.
+
+**Historical note**: earlier revisions of this project built `app`/`caddy` directly from a git-context `build:` pointing at this repo, since Hostinger never clones the surrounding repo. That only ever built once — `docker compose up` skips building a `build:`-context image that already exists locally, so every later "Update" click silently kept reusing that first image no matter how many commits landed on `main`, even though the click itself appeared to succeed. Switching to registry images (this section) fixed it, since a `pull` always fetches the current tag. See `CLAUDE.md` for the full incident writeup.
 
 ### TLS mode
 
@@ -122,8 +126,8 @@ You're live at that point — `/request` and `/menu` are ready for real attendee
 Deploys are **manual**, not automatic on merge — Hostinger's Compose-from-URL only re-fetches and rebuilds when you tell it to:
 
 1. Open a PR, wait for the required `lint-test-scan` CI check to go green (branch protection blocks merging otherwise)
-2. Merge to `main`
-3. In Hostinger's Docker Manager, click **Update** — this re-pulls `docker-compose.yml`, rebuilds the `app` image from the current `main`, and restarts it
+2. Merge to `main` — `publish-images.yml` builds and pushes new `app`/`caddy` images to GHCR automatically
+3. In Hostinger's Docker Manager, click **Update** — this re-pulls `docker-compose.yml` and the current `:latest` image tags, and restarts the stack
 
 **Confirmed:** Update preserves the named `app_data` volume — your SQLite database and any stored Spotify tokens survive every redeploy. Only the application code changes.
 
@@ -188,11 +192,11 @@ The second command dumps Caddy's actual compiled routing rule (via its own admin
 
 **Everything Spotify-related returns `403 Forbidden`** after connecting successfully (search results empty with a 500 in the app logs, the background poller logging repeated `403` errors for `/me/player/repeat`, etc.): a newly created Spotify app defaults to **Development Mode**, which restricts *all* API access to an explicit allowlist of up to 25 accounts — regardless of the scopes you approved on the consent screen. Add the Spotify account you connected with under the Dashboard's **User Management** section (app → Settings → User Management), then reconnect.
 
-**Clicking "Reconnect a different account" appears to do nothing, or bounces back to the admin login page**: fixed as of the session-cookie `SameSite` change (see `CLAUDE.md`) — `/admin/spotify/callback` is reached via a cross-site redirect from Spotify, which a `SameSite=Strict` cookie doesn't survive. If you're on an older deploy that still shows this, redeploy the current `main`.
+**Clicking "Reconnect Spotify" appears to do nothing**: if the admin's browser is already logged into Spotify with these scopes already granted, Spotify silently re-approves and redirects straight back with no visible screen at all (confirmed via a HAR capture — a 303 straight to the callback, zero rendered UI). `build_authorize_url` now sends `show_dialog=true` to force the consent screen to always render — if you're on an older deploy that predates this, redeploy the current `main`. Note this still can't force an *account switch*; Spotify's OAuth has no such prompt, so picking a different account requires logging out of Spotify in the browser first (also see the note in the admin Spotify page itself). Separately, `/admin/spotify/callback` being reached via a cross-site redirect from Spotify is also why the admin session cookie is `SameSite=Lax`, not `Strict` — a `Strict` cookie doesn't survive that redirect at all (see `CLAUDE.md`).
 
 ## Deployment model
 
-Hosting is Hostinger's Docker product via **Compose-from-URL**: Hostinger fetches only `docker-compose.yml` itself, never the surrounding repo, so `app.build.context` has to be a git URL rather than a local path — and since that build path can't authenticate against a private repo, the repo has to be public (mitigated by GitHub's secret scanning/push protection, step 2 above). See [`CLAUDE.md`](./CLAUDE.md) for the rest of the architecture.
+Hosting is Hostinger's Docker product via **Compose-from-URL**: Hostinger fetches only `docker-compose.yml` itself, never the surrounding repo. `docker-compose.yml` references pre-built `image:` tags on GHCR — `.github/workflows/publish-images.yml` builds and pushes them on every merge to `main` — rather than building from a git context, since a `build:`-context image is only ever built once by `docker compose up` (see the historical note above for the incident that caused this switch). Both the repo and the GHCR packages have to be public, since neither Hostinger's YAML fetch nor its image pull can authenticate (mitigated by GitHub's secret scanning/push protection, step 2 above). See [`CLAUDE.md`](./CLAUDE.md) for the rest of the architecture.
 
 ## Local development
 
@@ -204,7 +208,7 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Or via Docker Compose (`docker-compose.override.yml` builds from the local tree instead of the git-context build Hostinger uses):
+Or via Docker Compose (`docker-compose.override.yml` builds from the local tree instead of pulling the GHCR image Hostinger uses):
 
 ```bash
 cp .env.example .env

@@ -1,0 +1,56 @@
+# Builds and publishes the app/caddy images to GHCR on every merge to main.
+#
+# Why this exists: docker-compose.yml used to build these images directly from a
+# git-context URL (Dockerfile/caddy.Dockerfile in this repo), which is what
+# Hostinger's Compose-from-URL deploy path required (it only ever fetches the
+# compose file itself, never the surrounding repo). But `docker compose up` only
+# builds a `build:`-context image if it doesn't already exist locally — once
+# built once, Hostinger's "Update" button (which just re-runs `up`, not `build
+# --no-cache`) silently kept reusing the stale local image on every subsequent
+# redeploy, no matter how many commits landed on main. Every other project on
+# this VPS uses a plain `image: vendor/name:latest` (pulled from a registry),
+# and "Update" correctly re-pulls those — so publishing to a registry and
+# switching docker-compose.yml to `image:` makes this project's redeploys work
+# the same way as everything else on the box, instead of relying on a rebuild
+# path that Update never actually triggers.
+name: Publish images
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: event-playlist-app
+            dockerfile: Dockerfile
+          - image: event-playlist-caddy
+            dockerfile: caddy.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ghcr.io/pilly170/${{ matrix.image }}:latest
+            ghcr.io/pilly170/${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

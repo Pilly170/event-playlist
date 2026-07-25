@@ -291,23 +291,17 @@ This is the section flagged explicitly in your requirements, so treating it as f
 
 ## 9. Deployment (Hostinger Docker)
 
-**Source control & deployment:** source lives in a **public** GitHub repository — required, since Hostinger's git-context build path has no way to authenticate against a private one (see below). Deployment uses Hostinger's built-in **Compose from URL** feature — pasting the link to the repo's `docker-compose.yml` into hPanel's Docker Manager. Confirmed: Hostinger only ever fetches that YAML file itself, not the surrounding repo — so the `app` service's `build:` context can't be a local path like `.`; it must point at the git repository directly, using Compose/BuildKit's git-context syntax:
+**Source control & deployment:** source lives in a **public** GitHub repository. Deployment uses Hostinger's built-in **Compose from URL** feature — pasting the link to the repo's `docker-compose.yml` into hPanel's Docker Manager. Confirmed: Hostinger only ever fetches that YAML file itself, not the surrounding repo.
 
-```yaml
-services:
-  app:
-    build:
-      context: https://github.com/<owner>/<repo>.git#main
-      dockerfile: Dockerfile
-```
+**Superseded design, kept here for context:** `app`/`caddy` originally used a `build:` pointing at this repo's git URL (`build.context: https://github.com/<owner>/<repo>.git#main`), since Hostinger never clones the repo itself. This built exactly once, on initial deploy — `docker compose up` only builds a `build:`-context image if it doesn't already exist locally, so every subsequent "Update" click just reused that first stale image forever, regardless of new commits on `main`. **Current design:** `.github/workflows/publish-images.yml` builds both images from this repo on every merge to `main` and pushes them to GHCR (`ghcr.io/<owner>/event-playlist-app:latest`, `event-playlist-caddy:latest`); `docker-compose.yml` just references those tags via `image:`, the same way every other project on the target VPS already does. "Update" now does a real `pull` of the current tag instead of silently no-op'ing. See `CLAUDE.md` for the full incident writeup.
 
-This is confirmed as a **one-time build on initial deploy** — it does not redeploy automatically on new merges to `main`. Hostinger's Docker Manager has an "Update" action that re-pulls the compose file and rebuilds (picking up whatever the referenced git ref currently points at), but triggering it is a **manual step**, not something that fires on push.
+This is still a **manual redeploy step**, not automatic on merge — CI publishing a new image doesn't push it live by itself; someone still has to click "Update" in Hostinger's Docker Manager to pull the new tag and restart.
 
-Because of that, the security-scan gate (Snyk/pip-audit/bandit, per §8) sits **before merge**: a GitHub Actions workflow runs those checks on every push/PR, and a branch-protection rule on `main` requires them to pass before merging — so nothing unscanned reaches the branch the compose file's git-context points at. The manual "Update" click in hPanel is then the actual go-live moment, and needs documenting clearly in Phase 8's runbook as an explicit release step: *merge → CI green → someone clicks Update in Hostinger's Docker Manager*. Worth deciding whether that's always you personally for now, or something you want scripted later (if hPanel exposes an API for it).
+Because of that, the security-scan gate (Snyk/pip-audit/bandit, per §8) sits **before merge**: a GitHub Actions workflow runs those checks on every push/PR, and a branch-protection rule on `main` requires them to pass before merging — so nothing unscanned reaches `main`, which is the only branch `publish-images.yml` ever builds from. The manual "Update" click in hPanel is then the actual go-live moment: *merge → CI green → publish-images.yml pushes new image tags → someone clicks Update in Hostinger's Docker Manager*. Worth deciding whether that's always you personally for now, or something you want scripted later (if hPanel exposes an API for it).
 
-**Confirmed:** "Update" preserves the named SQLite volume and rebuilds/replaces the running image — data (requests, config, stored Spotify tokens) survives a redeploy; only the application code changes.
+**Confirmed:** "Update" preserves the named SQLite volume and replaces the running image — data (requests, config, stored Spotify tokens) survives a redeploy; only the application code changes.
 
-**Confirmed:** the repo is **public**. Hostinger's Compose-from-URL build path has no mechanism for supplying a PAT or deploy key to authenticate the git-context build, so a private repo isn't workable here — the code itself has to be public for this deploy path to build at all. This has no bearing on runtime secrets (Spotify client ID/secret, encryption keys) — those never live in the repo regardless, only as env vars in Hostinger's panel (§8) — but it does raise the bar on making sure nothing sensitive ever accidentally lands in a commit, since there's no "just don't share the repo" fallback if something slips through. See §8 for the added safeguard this brings in.
+**Confirmed:** the repo is **public** — Hostinger's Compose-from-URL fetch of `docker-compose.yml` itself has no mechanism for supplying a PAT or deploy key, so a private repo isn't workable here. The GHCR packages also need to be **public** for the same reason: Hostinger's image pull is unauthenticated, same as every other project's registry image on the target VPS. Neither of these has any bearing on runtime secrets (Spotify client ID/secret, encryption keys) — those never live in the repo or the image, only as env vars in Hostinger's panel (§8) — but it does raise the bar on making sure nothing sensitive ever accidentally lands in a commit, since there's no "just don't share it" fallback if something slips through. See §8 for the added safeguard this brings in.
 
 `docker-compose.yml` (two services): `caddy` and `app`, sharing a network; `app` mounts a named volume for the SQLite file; `caddy` mounts a volume for its certificate store and reads a `Caddyfile` pointing your domain at `app:8000`. Secrets referenced as `${VAR}` in the compose file, values set through Hostinger's own compose/env editor rather than a file on disk (§8).
 
@@ -381,7 +375,7 @@ Styling pass, admin UX cleanup, README/runbook (how to rotate the Spotify client
 3. **Queue status lookup:** reference code issued at submission, not name-matching (§6.1, §6.2).
 4. **Rate limiting:** 5 requests per requestor (by IP) per 30 minutes.
 5. **Denial:** the request row is deleted from the log/list entirely (per the original requirement), leaving only a separate admin-only audit trail entry — not a visible "denied" status anywhere the public can see (§6.3).
-6. **Deployment method:** Hostinger's built-in Compose-from-URL, which only fetches the compose file itself — so `build.context` must reference the git repo directly, and rebuilds are a **manual "Update" click** in hPanel, not automatic on merge (§9). Security scanning gates merges to `main` via branch protection instead of gating the deploy step itself. **Confirmed:** "Update" preserves the named SQLite volume and just rebuilds/replaces the image — data survives redeploys. **Confirmed:** the repo must be **public**, since Hostinger's build path has no way to authenticate a git-context build against a private repo — mitigated by enabling GitHub's secret scanning/push protection (§8) as a Phase 0 setup step.
+6. **Deployment method:** Hostinger's built-in Compose-from-URL, which only fetches the compose file itself; `docker-compose.yml` references pre-built images published to GHCR by CI on every merge to `main` (§9 — this superseded an earlier git-context `build:` design that only ever built once). Rebuilds are still a **manual "Update" click** in hPanel, not automatic on merge. Security scanning gates merges to `main` via branch protection instead of gating the deploy step itself. **Confirmed:** "Update" preserves the named SQLite volume and just re-pulls/replaces the image — data survives redeploys. **Confirmed:** the repo and the GHCR packages must both be **public**, since Hostinger's fetch/pull paths have no way to authenticate against a private one — mitigated by enabling GitHub's secret scanning/push protection (§8) as a Phase 0 setup step.
 7. **Rate limiting:** keyed by a per-browser device-token cookie as the primary limit (5 requests/30 min), not IP — since venue WiFi typically puts many genuine requestors behind one shared IP. IP is kept only as a coarse abuse backstop (§6.1, §4).
 8. **Duplicate concurrent requests:** confirmed — blocked. If a track is already `pending` or `added`, a second person's request for the same track is rejected; first request wins (§6.1).
 
@@ -448,7 +442,7 @@ spotify-request-app/
 │   │   └── fixtures/               # recorded Spotify API responses, per §10
 │   └── conftest.py
 ├── Dockerfile                      # §9
-├── docker-compose.yml              # §9 — build.context points at this repo's git URL
+├── docker-compose.yml              # §9 — image: references the GHCR tags publish-images.yml pushes
 ├── Caddyfile
 ├── requirements.txt
 ├── requirements-dev.txt            # pytest, bandit, ruff/black, pip-audit
