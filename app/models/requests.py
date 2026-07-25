@@ -9,7 +9,7 @@ _MAX_REFERENCE_CODE_ATTEMPTS = 5
 _SELECT_REQUEST = (
     "SELECT id, spotify_track_uri, track_name, artist_name, is_explicit, requestor_name, "
     "reference_code, device_token, client_ip, status, requested_at, decided_at, decided_by, "
-    "playlist_insert_position FROM requests"
+    "playlist_insert_position, reminder_sent_at FROM requests"
 )
 
 
@@ -35,6 +35,7 @@ class Request:
     decided_at: datetime | None
     decided_by: str | None
     playlist_insert_position: int | None
+    reminder_sent_at: datetime | None
 
 
 def has_pending_duplicate(conn: sqlite3.Connection, spotify_track_uri: str) -> bool:
@@ -176,6 +177,36 @@ def list_added(conn: sqlite3.Connection) -> list[Request]:
     return [_row_to_request(row) for row in rows]
 
 
+def list_pending_requested_before(
+    conn: sqlite3.Connection, cutoff: datetime
+) -> list[Request]:
+    rows = conn.execute(
+        f"{_SELECT_REQUEST} WHERE status = 'pending' AND requested_at <= ? "
+        "ORDER BY requested_at",
+        (cutoff.isoformat(),),
+    ).fetchall()
+    return [_row_to_request(row) for row in rows]
+
+
+def list_pending_needing_reminder(
+    conn: sqlite3.Connection, cutoff: datetime
+) -> list[Request]:
+    rows = conn.execute(
+        f"{_SELECT_REQUEST} WHERE status = 'pending' AND reminder_sent_at IS NULL "
+        "AND requested_at <= ? ORDER BY requested_at",
+        (cutoff.isoformat(),),
+    ).fetchall()
+    return [_row_to_request(row) for row in rows]
+
+
+def mark_reminder_sent(conn: sqlite3.Connection, request_id: int) -> None:
+    conn.execute(
+        "UPDATE requests SET reminder_sent_at = ? WHERE id = ?",
+        (datetime.now(timezone.utc).isoformat(), request_id),
+    )
+    conn.commit()
+
+
 def _row_to_request(row) -> Request:
     (
         id_,
@@ -192,6 +223,7 @@ def _row_to_request(row) -> Request:
         decided_at,
         decided_by,
         playlist_insert_position,
+        reminder_sent_at,
     ) = row
     return Request(
         id=id_,
@@ -208,4 +240,7 @@ def _row_to_request(row) -> Request:
         decided_at=datetime.fromisoformat(decided_at) if decided_at else None,
         decided_by=decided_by,
         playlist_insert_position=playlist_insert_position,
+        reminder_sent_at=(
+            datetime.fromisoformat(reminder_sent_at) if reminder_sent_at else None
+        ),
     )
