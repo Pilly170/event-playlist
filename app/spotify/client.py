@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 from dataclasses import dataclass
 
@@ -7,6 +8,24 @@ from app.services.crypto import TokenCipher
 from app.spotify.auth_manager import get_valid_access_token
 
 API_BASE_URL = "https://api.spotify.com/v1"
+
+logger = logging.getLogger(__name__)
+
+
+def _raise_for_status_logged(response: httpx2.Response) -> None:
+    # response.raise_for_status() alone only surfaces the HTTP status in logs/tracebacks
+    # — Spotify's actual error body (e.g. naming a scope, quota-mode, or account-access
+    # reason) gets silently discarded, which made a real production 403 far harder to
+    # diagnose than it needed to be. Log the body before raising so it ends up wherever
+    # this app's other errors already go.
+    if response.status_code >= 400:
+        logger.error(
+            "Spotify API error %s for %s: %s",
+            response.status_code,
+            response.request.url,
+            response.text,
+        )
+    response.raise_for_status()
 
 
 @dataclass
@@ -49,7 +68,7 @@ async def get_currently_playing(
     )
     if response.status_code == 204:
         return None
-    response.raise_for_status()
+    _raise_for_status_logged(response)
     return response.json()
 
 
@@ -91,7 +110,7 @@ async def get_playlist_tracks(
         params={"limit": limit, "offset": offset},
         headers={"Authorization": f"Bearer {access_token}"},
     )
-    response.raise_for_status()
+    _raise_for_status_logged(response)
     data = response.json()
     items = [
         _track_json_to_result(item["track"])
@@ -155,7 +174,7 @@ async def insert_track_into_playlist(
         json={"uris": [track_uri], "position": position},
         headers={"Authorization": f"Bearer {access_token}"},
     )
-    response.raise_for_status()
+    _raise_for_status_logged(response)
     return response.json()["snapshot_id"]
 
 
@@ -177,7 +196,7 @@ async def search_tracks(
         params={"type": "track", "q": query, "limit": limit},
         headers={"Authorization": f"Bearer {access_token}"},
     )
-    response.raise_for_status()
+    _raise_for_status_logged(response)
     items = response.json()["tracks"]["items"]
     return [_track_json_to_result(item) for item in items]
 
@@ -201,7 +220,7 @@ async def get_track(
     )
     if response.status_code == 404:
         return None
-    response.raise_for_status()
+    _raise_for_status_logged(response)
     return _track_json_to_result(response.json())
 
 
@@ -222,7 +241,7 @@ async def set_repeat_mode(
         params={"state": "context" if enabled else "off"},
         headers={"Authorization": f"Bearer {access_token}"},
     )
-    response.raise_for_status()
+    _raise_for_status_logged(response)
 
 
 async def delete_track_from_playlist(
@@ -248,7 +267,7 @@ async def delete_track_from_playlist(
         json={"tracks": [{"uri": track_uri, "positions": [position]}]},
         headers={"Authorization": f"Bearer {access_token}"},
     )
-    response.raise_for_status()
+    _raise_for_status_logged(response)
     return response.json()["snapshot_id"]
 
 
