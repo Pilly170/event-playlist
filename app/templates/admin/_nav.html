@@ -1,7 +1,7 @@
 <nav class="admin-nav">
-  <a href="/admin/requests">Requests</a>
-  <a href="/admin/config">Config</a>
-  <a href="/admin/spotify">Spotify</a>
+  <a href="/admin/requests" {% if request.url.path == "/admin/requests" %}class="active" aria-current="page"{% endif %}>Requests</a>
+  <a href="/admin/config" {% if request.url.path == "/admin/config" %}class="active" aria-current="page"{% endif %}>Config</a>
+  <a href="/admin/spotify" {% if request.url.path == "/admin/spotify" %}class="active" aria-current="page"{% endif %}>Spotify</a>
   <form method="post" action="/admin/logout" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button type="submit">Log out</button>
