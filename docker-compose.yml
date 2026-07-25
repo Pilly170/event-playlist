@@ -6,12 +6,16 @@
 # never rebuilds) kept silently redeploying a stale image no matter how many commits landed.
 # Referencing a registry image instead makes "Update" behave the same way it does for every
 # other project on this VPS (all of which use image:, not build:) — it actually re-pulls.
+# pull_policy: always forces that re-pull unconditionally on every `up`, rather than relying
+# on Compose's default (only pull an image: tag if nothing matching is already cached locally)
+# — belt-and-braces given how unreliable this deploy path has already proven to be.
 # For local development, docker-compose.override.yml overrides this to build from the local
 # tree instead of pulling from GHCR.
 
 services:
   caddy:
     image: ghcr.io/pilly170/event-playlist-caddy:latest
+    pull_policy: always
     restart: unless-stopped
     # No published port at all: a separate, already-deployed Traefik project on this
     # VPS (see /docker/traefik/docker-compose.yml on the host, CLAUDE.md has the full
@@ -36,6 +40,7 @@ services:
 
   app:
     image: ghcr.io/pilly170/event-playlist-app:latest
+    pull_policy: always
     restart: unless-stopped
     environment:
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
