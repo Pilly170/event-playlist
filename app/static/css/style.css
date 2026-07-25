@@ -400,6 +400,12 @@ button.stamp-deny {
   color: var(--stamp-green);
 }
 
+.admin-nav a.active {
+  color: var(--stamp-green);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
 .admin-nav form {
   margin: 0;
 }
