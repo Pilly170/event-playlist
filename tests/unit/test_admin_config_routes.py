@@ -3,6 +3,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.db import get_connection, run_migrations
 from app.dependencies import get_db
 from app.main import app
@@ -54,6 +55,7 @@ def test_config_submit_persists_changes_with_a_valid_csrf_token(client, db_path)
         data={
             "insert_tracks_ahead": "7",
             "poll_interval_seconds": "20",
+            "pending_request_timeout_minutes": "15",
             "csrf_token": csrf_token,
         },
         follow_redirects=False,
@@ -72,7 +74,11 @@ def test_config_submit_rejects_missing_csrf_token(client, db_path):
 
     response = client.post(
         "/admin/config",
-        data={"insert_tracks_ahead": "7", "poll_interval_seconds": "20"},
+        data={
+            "insert_tracks_ahead": "7",
+            "poll_interval_seconds": "20",
+            "pending_request_timeout_minutes": "15",
+        },
     )
 
     assert response.status_code == 422
@@ -88,6 +94,7 @@ def test_config_submit_rejects_wrong_csrf_token(client, db_path):
         data={
             "insert_tracks_ahead": "7",
             "poll_interval_seconds": "20",
+            "pending_request_timeout_minutes": "15",
             "csrf_token": "not-the-right-token",
         },
     )
@@ -95,3 +102,61 @@ def test_config_submit_rejects_wrong_csrf_token(client, db_path):
     assert response.status_code == 403
     conn = get_connection(db_path)
     assert conn.execute("SELECT insert_tracks_ahead FROM config").fetchone()[0] == 3
+
+
+def test_config_form_renders_pending_request_timeout(client):
+    response = client.get("/admin/config")
+
+    assert response.status_code == 200
+    assert 'name="pending_request_timeout_minutes" value="15"' in response.text
+
+
+def test_config_form_renders_notification_email_as_disabled(client, monkeypatch):
+    monkeypatch.setattr(settings, "notification_email", "admin@example.com")
+
+    response = client.get("/admin/config")
+
+    assert 'value="admin@example.com"' in response.text
+    assert "disabled" in response.text
+
+
+def test_config_submit_persists_pending_request_timeout(client, db_path):
+    csrf_token = _extract_csrf_token(client.get("/admin/config").text)
+
+    response = client.post(
+        "/admin/config",
+        data={
+            "insert_tracks_ahead": "3",
+            "poll_interval_seconds": "15",
+            "pending_request_timeout_minutes": "45",
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    conn = get_connection(db_path)
+    row = conn.execute("SELECT pending_request_timeout_minutes FROM config").fetchone()
+    assert row == (45,)
+
+
+def test_config_submit_cannot_change_notification_email(client, db_path, monkeypatch):
+    monkeypatch.setattr(settings, "notification_email", "real@example.com")
+    csrf_token = _extract_csrf_token(client.get("/admin/config").text)
+
+    # A disabled field never submits, but this also proves the server ignores it
+    # even if a crafted request includes it — there's no code path that reads
+    # notification_email out of the POST body at all.
+    client.post(
+        "/admin/config",
+        data={
+            "insert_tracks_ahead": "3",
+            "poll_interval_seconds": "15",
+            "pending_request_timeout_minutes": "15",
+            "notification_email": "attacker@example.com",
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
+    )
+
+    assert settings.notification_email == "real@example.com"
