@@ -225,6 +225,51 @@ async def test_tick_continues_after_one_request_fails_to_auto_approve(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_tick_continues_approving_after_one_reminder_fails(tmp_path, monkeypatch):
+    conn = _connection(tmp_path)
+    cipher = _connected_cipher(conn)
+    update_config(
+        conn, default_playlist_id="playlist123", pending_request_timeout_minutes=15
+    )
+    # Needs a reminder (inside the 2-minute lead window) but not yet due for
+    # auto-approval.
+    needs_reminder = _create_pending(conn, spotify_track_uri="spotify:track:reminder")
+    _backdate(conn, needs_reminder.id, minutes_ago=14)
+    # Separate, already-overdue request that should still get auto-approved even
+    # though the reminder loop above fails for the other request.
+    overdue = _create_pending(conn, spotify_track_uri="spotify:track:overdue")
+    _backdate(conn, overdue.id, minutes_ago=20)
+
+    def _raising_mark_reminder_sent(*args, **kwargs):
+        raise RuntimeError("simulated DB write failure")
+
+    monkeypatch.setattr(
+        "app.worker.request_timeout.mark_reminder_sent", _raising_mark_reminder_sent
+    )
+
+    client = _mock_spotify_client(
+        now_playing_uri="spotify:track:current",
+        playlist_uris=["spotify:track:current"],
+    )
+
+    await run_timeout_tick(
+        conn,
+        cipher,
+        client,
+        client_id="id",
+        client_secret="secret",
+        timeout_minutes=15,
+        email_settings=_no_op_email_settings(),
+    )
+
+    updated_overdue = get_by_id(conn, overdue.id)
+    assert updated_overdue.status == "added"
+    updated_reminder = get_by_id(conn, needs_reminder.id)
+    assert updated_reminder.status == "pending"
+    assert updated_reminder.reminder_sent_at is None
+
+
+@pytest.mark.asyncio
 async def test_loop_ticks_and_stops_promptly_when_signaled(tmp_path):
     conn = _connection(tmp_path)
     cipher = _connected_cipher(conn)

@@ -47,14 +47,27 @@ async def run_timeout_tick(
             minutes=timeout_minutes - REMINDER_LEAD_MINUTES
         )
         for request in list_pending_needing_reminder(conn, reminder_cutoff):
-            # send_pending_request_reminder never raises (see
-            # app/services/notifications.py) — marking as sent regardless of
-            # whether delivery actually succeeded is deliberate: this is a
-            # best-effort courtesy notification, not the safety net itself, and a
-            # single-attempt policy avoids resending forever against a
-            # persistently broken SMTP config.
-            send_pending_request_reminder(request, email_settings)
-            mark_reminder_sent(conn, request.id)
+            try:
+                # send_pending_request_reminder itself never raises (see
+                # app/services/notifications.py) — marking as sent regardless of
+                # whether delivery actually succeeded is deliberate: this is a
+                # best-effort courtesy notification, not the safety net itself,
+                # and a single-attempt policy avoids resending forever against a
+                # persistently broken SMTP config. The try/except here guards
+                # against everything else in the loop body (e.g. mark_reminder_sent,
+                # a DB write) so one bad reminder can't abort the tick and skip a
+                # different, unrelated request's auto-approval below.
+                #
+                # Runs the blocking SMTP call in a worker thread — smtplib's
+                # socket I/O would otherwise block this single event loop, which
+                # also serves all public/admin HTTP traffic and the Spotify
+                # poller.
+                await asyncio.to_thread(
+                    send_pending_request_reminder, request, email_settings
+                )
+                mark_reminder_sent(conn, request.id)
+            except Exception:
+                logger.exception("Reminder send failed for request %s", request.id)
 
     approval_cutoff = now - timedelta(minutes=timeout_minutes)
     for request in list_pending_requested_before(conn, approval_cutoff):
