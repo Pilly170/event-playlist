@@ -22,7 +22,9 @@ from app.routers import (
 )
 from app.services.admin_seed import seed_default_admin_if_needed
 from app.services.crypto import TokenCipher
+from app.services.notifications import EmailSettings
 from app.worker.poller import poll_forever
+from app.worker.request_timeout import timeout_loop_forever
 
 APP_DIR = Path(__file__).parent
 
@@ -56,11 +58,41 @@ async def lifespan(app: FastAPI):
         )
     )
 
+    # A second, independent in-process task — same single-process reasoning as the
+    # poller above applies here too, but this loop is otherwise unrelated to it: it
+    # only touches the requests table and calls approve_request(), never Spotify
+    # playback-state polling. See docs/superpowers/specs/
+    # 2026-07-25-pending-request-auto-approval-design.md for why this isn't folded
+    # into the poller's own tick instead.
+    timeout_stop_event = asyncio.Event()
+    timeout_task = asyncio.create_task(
+        timeout_loop_forever(
+            settings.database_path,
+            TokenCipher(key=settings.token_encryption_key),
+            app.state.http_client,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+            email_settings=EmailSettings(
+                smtp_host=settings.smtp_host,
+                smtp_port=settings.smtp_port,
+                smtp_username=settings.smtp_username,
+                smtp_password=settings.smtp_password,
+                smtp_from_address=settings.smtp_from_address,
+                notification_email=settings.notification_email,
+                domain=settings.domain,
+            ),
+            stop_event=timeout_stop_event,
+        )
+    )
+
     yield
 
     poller_stop_event.set()
+    timeout_stop_event.set()
     with contextlib.suppress(asyncio.CancelledError):
         await poller_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await timeout_task
     await app.state.http_client.aclose()
 
 

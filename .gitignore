@@ -11,3 +11,4 @@ data/
 htmlcov/
 .coverage
 .claude/settings.local.json
+.superpowers/

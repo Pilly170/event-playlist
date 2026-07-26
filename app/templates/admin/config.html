@@ -30,6 +30,14 @@
     Poll interval (seconds)
     <input type="number" name="poll_interval_seconds" value="{{ config.poll_interval_seconds }}" min="1" required>
   </label>
+  <label>
+    Auto-approve a pending request after this many minutes
+    <input type="number" name="pending_request_timeout_minutes" value="{{ config.pending_request_timeout_minutes }}" min="1" required>
+  </label>
+  <label>
+    Notification email (set via server config, not editable here)
+    <input type="email" value="{{ notification_email or 'not configured' }}" disabled>
+  </label>
   <button type="submit">Save settings</button>
 </form>
 {% endblock %}

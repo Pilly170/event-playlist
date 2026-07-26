@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
+from app.config import settings
 from app.dependencies import get_db
 from app.models.audit_log import write_audit_log
 from app.models.config import get_config, update_config
@@ -24,7 +25,11 @@ async def config_form(
     return templates.TemplateResponse(
         request,
         "admin/config.html",
-        {"config": config, "csrf_token": get_or_create_csrf_token(request)},
+        {
+            "config": config,
+            "notification_email": settings.notification_email,
+            "csrf_token": get_or_create_csrf_token(request),
+        },
     )
 
 
@@ -37,6 +42,7 @@ async def config_submit(
     insert_tracks_ahead: int = Form(...),
     playlist_repeat_enabled: bool = Form(False),
     poll_interval_seconds: int = Form(...),
+    pending_request_timeout_minutes: int = Form(...),
     username: str = Depends(require_onboarded_admin),
     db: sqlite3.Connection = Depends(get_db),
     _csrf: None = Depends(verify_csrf_token),
@@ -49,6 +55,7 @@ async def config_submit(
         insert_tracks_ahead=insert_tracks_ahead,
         playlist_repeat_enabled=playlist_repeat_enabled,
         poll_interval_seconds=poll_interval_seconds,
+        pending_request_timeout_minutes=pending_request_timeout_minutes,
     )
     write_audit_log(db, actor=username, action="config.update", detail=str(updated))
     return RedirectResponse("/admin/config", status_code=303)

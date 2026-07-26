@@ -9,11 +9,13 @@ _EDITABLE_FIELDS = {
     "insert_tracks_ahead",
     "playlist_repeat_enabled",
     "poll_interval_seconds",
+    "pending_request_timeout_minutes",
 }
 
 _SELECT_CONFIG = (
     "SELECT require_admin_approval, exclude_explicit, default_playlist_id, "
-    "insert_tracks_ahead, playlist_repeat_enabled, poll_interval_seconds, updated_at "
+    "insert_tracks_ahead, playlist_repeat_enabled, poll_interval_seconds, "
+    "pending_request_timeout_minutes, updated_at "
     "FROM config WHERE id = 1"
 )
 
@@ -26,6 +28,7 @@ class AppConfig:
     insert_tracks_ahead: int
     playlist_repeat_enabled: bool
     poll_interval_seconds: int
+    pending_request_timeout_minutes: int
     updated_at: datetime
 
 
@@ -62,6 +65,7 @@ def _row_to_config(row) -> AppConfig:
         insert_tracks_ahead,
         playlist_repeat_enabled,
         poll_interval_seconds,
+        pending_request_timeout_minutes,
         updated_at,
     ) = row
     return AppConfig(
@@ -71,5 +75,6 @@ def _row_to_config(row) -> AppConfig:
         insert_tracks_ahead=insert_tracks_ahead,
         playlist_repeat_enabled=bool(playlist_repeat_enabled),
         poll_interval_seconds=poll_interval_seconds,
+        pending_request_timeout_minutes=pending_request_timeout_minutes,
         updated_at=datetime.fromisoformat(updated_at),
     )
