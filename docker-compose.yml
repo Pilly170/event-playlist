@@ -51,6 +51,12 @@ services:
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       DATABASE_PATH: /data/app.db
       DOMAIN: ${DOMAIN}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-}
+      NOTIFICATION_EMAIL: ${NOTIFICATION_EMAIL:-}
     volumes:
       - app_data:/data
     expose:

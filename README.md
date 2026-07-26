@@ -59,6 +59,12 @@ In Hostinger's Docker Manager, use **Compose from URL**, pointing at this repo's
 | `DOMAIN` | a real domain pointed at this VPS's IP, **or** `<project-name>.<vps-hostname>.hstgr.cloud` (e.g. `event-playlist.srv1234567.hstgr.cloud`) if you don't have a custom domain yet — see below for why the bare VPS hostname alone isn't a good choice |
 | `SITE_ADDRESS` | `http://<same value as DOMAIN>` — Traefik terminates real TLS in front of this, so Caddy only ever serves plain HTTP internally |
 | `SECURE_COOKIES` | `true` once you've confirmed `https://<DOMAIN>` actually works end-to-end (see [TLS mode](#tls-mode)) |
+| `SMTP_HOST` | optional — SMTP server for the pending-request reminder email; leave blank to disable reminder emails entirely (auto-approval still works without it) |
+| `SMTP_PORT` | optional — defaults to `587` |
+| `SMTP_USERNAME` | optional — SMTP auth username |
+| `SMTP_PASSWORD` | optional — SMTP auth password |
+| `SMTP_FROM_ADDRESS` | optional — falls back to `SMTP_USERNAME` if blank |
+| `NOTIFICATION_EMAIL` | optional — where pending-request reminder emails are sent; shown read-only on `/admin/config` |
 
 Click **Update** to build and start the stack, then visit `https://<DOMAIN>/request` to confirm it's live.
 
